@@ -570,7 +570,7 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 					individuals1 = 0;
 					individuals2 = 0;
 					int count = 0;
-					for (uint64_t x = (individuals / 4)-1; x>=b*16; x--) {//TODO: confirm if possible breaking point for uk biobank
+					for (uint64_t x = (individuals / 4); x>=b*16; x--) {//TODO: confirm if possible breaking point for uk biobank
 						individuals1 = individuals1 << 8;
 						individuals1 += data8[x];
 
@@ -581,7 +581,7 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 					individuals1 = data64[b * 2];
 					individuals2 = 0;
 					int count = 0;
-					for (uint64_t x = (individuals / 4)-1; x>=b*16+8; x--) {//TODO: confirm if possible breaking point for uk biobank
+					for (uint64_t x = (individuals / 4); x>=b*16+8; x--) {//TODO: confirm if possible breaking point for uk biobank
 						individuals2 = individuals2 << 8;
 						individuals2 += data8[x];
 
