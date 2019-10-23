@@ -2,11 +2,7 @@
 
 IBIS is a fast IBD Segment calling algorithm aimed at large, unphased genome datasets.
 
-## Getting Started
-
-Downloading this repository will give you the compiled c++ executable "ibis" and this is runnable by itself, though it may not be compiled optimally for all environments. If you want to compile it yourself, you will need to use the included Makefile.
-
-### Prerequisites
+### Compiling IBIS
 
 Download the Makefile and the included IBIS.cc file, and run:
 
