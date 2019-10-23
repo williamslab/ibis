@@ -850,7 +850,9 @@ int main(int argc, char **argv) {
 	struct timespec startTime;
 	clock_gettime(CLOCK_REALTIME, &startTime);
 	uint8_t **dataPointer;
-
+	char* VERSION_NUMBER = "1.01";
+	char* RELEASE_DATE = "October 23, 2019";
+	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 	int *bytesPerMarker;
 
 	uint64_t numIndivs, numMarkers;
