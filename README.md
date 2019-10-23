@@ -4,84 +4,44 @@ IBIS is a fast IBD Segment calling algorithm aimed at large, unphased genome dat
 
 ## Getting Started
 
-Downloading this repository will give you the compiled c++ executable "ibis" and this is runnable by itself. If you want to compile it yourself, you will need to use the included Makefile.
+Downloading this repository will give you the compiled c++ executable "ibis" and this is runnable by itself, though it may not be compiled optimally for all environments. If you want to compile it yourself, you will need to use the included Makefile.
 
 ### Prerequisites
 
-What things you need to install the software and how to install them
+Download the Makefile and the included IBIS.cc file, and run:
 
 ```
-Give examples
+make
 ```
+in the same directory. You will need the genetio library from another williamslab repository:
+https://github.com/williamslab/genetio
 
-### Installing
+## Supported input formats
 
-A step by step series of examples that tell you how to get a development env running
+IBIS requires PLINK .bed, .bim, and .fam format data to run. PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
 
-Say what the step will be
+##IBIS Usage
 
-```
-Give the example
-```
+IBIS accepts its input .bed, .bim, and .fam files in one of two ways:
 
-And repeat
+         * First Three Arguments: [bed file] [bim file] [fam file]         Specifies the plink format files for the data by specific name. Must be first 3 arguments.
+         or
+         * -b [prefix] or -bfile [prefix]         Specifies the prefix to be used with prefix.bed, prefix.bim, and prefix.fam for the plink format input.
+                                         Does not need to be first argument
+.
+OPTIONS:
+        *-mL or -min_l <value>            Specify minimum length for acceptible segments to output.
+                                         Defaults to 7 centimorgans.
+        *-er or -errorRate <value>        specify acceptible error rate in a segment before considering it false.
+                                         Defaults to .004 errors per marker
+         *-f or file <filename>           Specify output file.
+                                         Defaults to ibis<thread number>.seg and will output a separate output file for each thread.
+         *-m or -merge                    allows internal merging of segments over gaps caused by potential errors.
+         *-2 or -ibd2                     enable ibd2 analyses
+         *-mt <value>                     set an error threshold for leniency toward local spikes in error rate
+         *-threads <value>                set the number of threads available to IBIS for parallel processing.
 
-```
-until finished
-```
-
-End with an example of getting some data out of the system or using it for a little demo
-
-## Running the tests
-
-Explain how to run the automated tests for this system
-
-### Break down into end to end tests
-
-Explain what these tests test and why
-
-```
-Give an example
-```
-
-### And coding style tests
-
-Explain what these tests test and why
-
-```
-Give an example
-```
-
-## Deployment
-
-Add additional notes about how to deploy this on a live system
-
-## Built With
-
-* [Dropwizard](http://www.dropwizard.io/1.0.2/docs/) - The web framework used
-* [Maven](https://maven.apache.org/) - Dependency Management
-* [ROME](https://rometools.github.io/rome/) - Used to generate RSS Feeds
-
-## Contributing
-
-Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on our code of conduct, and the process for submitting pull requests to us.
-
-## Versioning
-
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags). 
-
-## Authors
-
-* **Billie Thompson** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
-
-See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
-
-## Acknowledgments
-
-* Hat tip to anyone whose code was used
-* Inspiration
-* etc
