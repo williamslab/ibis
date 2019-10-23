@@ -1,4 +1,4 @@
-# Project Title
+# IBIS
 
 IBIS is a fast IBD Segment calling algorithm aimed at large, unphased genome datasets.
 
