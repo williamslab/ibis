@@ -12,7 +12,11 @@ make
 in the same directory. You will need the genetio library from:
 https://github.com/williamslab/genetio
 
-IBIS also requires the zlib and libpthread libraries.
+
+Include the genetio.a file from that repository in your LD_LIBRARY_PATH environment variable.
+
+IBIS also requires the zlib library.
+OpenMP is required for parallelization, but this is included in current GCC versions.
 ### Supported input formats
 
 IBIS requires PLINK .bed, .bim, and .fam format data to run. PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
