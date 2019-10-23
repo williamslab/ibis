@@ -15,8 +15,7 @@ https://github.com/williamslab/genetio
 
 Include the genetio.a file's location in your LD_LIBRARY_PATH environment variable.
 
-IBIS also requires the zlib library.
-OpenMP is required for parallelization, but this is included in current GCC versions.
+IBIS also requires zlib and OpenMP.
 ### Supported input formats
 
 IBIS requires PLINK .bed, .bim, and .fam format data to run. PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
