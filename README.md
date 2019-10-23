@@ -58,7 +58,7 @@ IBIS options:
 * -2 or -ibd2                     
 	* enable ibd2 analyses
 * -mt \<value\>                     
-	* set an error threshold for leniency toward local spikes in error rate
+	* Specify a minimum number of markers required for a segment to be printed.
 * -threads \<value\>                
 	* set the number of threads available to IBIS for parallel processing.
 
