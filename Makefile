@@ -30,7 +30,7 @@ ifdef PROFILE       # to use run `make PROFILE=1
   CFLAGS += -pg
 endif
 
-LIBS= -lgenetio -lz -lpthread
+LIBS= -lgenetio -lz
 
 # dependency variables / commands
 DEPDIR = .deps
