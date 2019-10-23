@@ -35,7 +35,7 @@ Example:
 or
 * -b [prefix] or -bfile [prefix]         
 	* Specifies the prefix to be used with prefix.bed, prefix.bim, and prefix.fam for the plink format input.
-        * Does not need to be first argument
+	* Does not need to be first argument
 
 ```
 ./ibis -bfile test1-chr1 -min_l 7 -mt 500 -er .004 -f test1Out
@@ -43,8 +43,8 @@ or
 IBIS options:
 
 * -chr <value>
-	*Specify a single chromosome for IBIS to process when given an input file with multiple chromosomes.
-	*IBIS will fail if this is not specified and there are multiple chromosomes in the input files.
+	* Specify a single chromosome for IBIS to process when given an input file with multiple chromosomes.
+	* IBIS will fail if this is not specified and there are multiple chromosomes in the input files.
 * -mL or -min_l <value>            
 	* Specify minimum length for acceptible segments to output.
 	* Defaults to 7 centimorgans.
