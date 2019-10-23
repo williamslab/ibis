@@ -38,25 +38,25 @@ or
 ```
 IBIS options:
 
-* -chr <value>
+* -chr \<value\>
 	* Specify a single chromosome for IBIS to process when given an input file with multiple chromosomes.
 	* IBIS will fail if this is not specified and there are multiple chromosomes in the input files.
-* -mL or -min_l <value>            
+* -mL or -min_l \<value\>            
 	* Specify minimum length for acceptible segments to output.
 	* Defaults to 7 centimorgans.
-* -er or -errorRate <value>        
+* -er or -errorRate \<value\>        
 	* specify acceptible error rate in a segment before considering it false.                           
 	* Defaults to .004 errors per marker
-* -f or file <filename>           
+* -f or file \<filename\>           
 	* Specify output file.
-	* Defaults to ibis<thread number>.seg and will output a separate output file for each thread.
+	* Defaults to ibis\<thread number\>.seg and will output a separate output file for each thread.
 * -m or -merge                    
 	* allows internal merging of segments over gaps caused by potential errors.
 * -2 or -ibd2                     
 	* enable ibd2 analyses
-* -mt <value>                     
+* -mt \<value\>                     
 	* set an error threshold for leniency toward local spikes in error rate
-* -threads <value>                
+* -threads \<value\>                
 	* set the number of threads available to IBIS for parallel processing.
 
 ## License
