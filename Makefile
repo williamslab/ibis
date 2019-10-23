@@ -2,14 +2,18 @@
 #CPPSRCS = TransposeBSQUID_no_leniency_2.cc
 
 
-CPPSRCS = IBISv1.01.cc
+CPPSRCS = IBIS.cc
 
 CSRCS= 
 OBJS= $(patsubst %.cc,%.o,$(CPPSRCS)) $(patsubst %.c,%.o,$(CSRCS))
 
 #EXEC = IBISv0.99_no_leniency_2
 #EXEC = IBISv0.99_parallel_3
-EXEC = IBISv1.01
+
+EXEC = ibis
+#EXEC = IBISv1.01
+
+
 GPP = g++
 GCC = gcc
 DEFINES= 
