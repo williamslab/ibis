@@ -51,8 +51,6 @@ IBIS options:
 * -f or file \<filename\>           
 	* Specify output file.
 	* Defaults to ibis\<thread number\>.seg and will output a separate output file for each thread.
-* -m or -merge                    
-	* allows internal merging of segments over gaps caused by potential errors.
 * -2 or -ibd2                     
 	* enable ibd2 analyses
 * -mt \<value\>                     
