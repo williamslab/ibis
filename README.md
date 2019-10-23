@@ -13,7 +13,7 @@ in the same directory. You will need the genetio library from:
 https://github.com/williamslab/genetio
 
 
-Include the genetio.a file from that repository in your LD_LIBRARY_PATH environment variable.
+Include the genetio.a file's location in your LD_LIBRARY_PATH environment variable.
 
 IBIS also requires the zlib library.
 OpenMP is required for parallelization, but this is included in current GCC versions.
