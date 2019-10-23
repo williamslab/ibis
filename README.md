@@ -24,12 +24,13 @@ IBIS requires PLINK .bed, .bim, and .fam format data to run. PLINK can be run wi
 
 IBIS accepts its input .bed, .bim, and .fam files in one of two ways:
 
-* First Three Arguments: [bed file] [bim file] [fam file]         Specifies the plink format files for the data by specific name. Must be first 3 arguments.
-         or
-* -b [prefix] or -bfile [prefix]         Specifies the prefix to be used with prefix.bed, prefix.bim, and prefix.fam for the plink format input.
-                                         Does not need to be first argument
-.
-OPTIONS:
+* First Three Arguments: [bed file] [bim file] [fam file]         
+	*Specifies the plink format files for the data by specific name. Must be first 3 arguments.
+or
+* -b [prefix] or -bfile [prefix]         
+	*Specifies the prefix to be used with prefix.bed, prefix.bim, and prefix.fam for the plink format input.
+        *Does not need to be first argument
+IBIS options:
 *-mL or -min_l <value>            
 	*Specify minimum length for acceptible segments to output.
 	*Defaults to 7 centimorgans.
