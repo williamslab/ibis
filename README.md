@@ -11,7 +11,7 @@ make
 ```
 in the same directory. You will need the genetio library from another williamslab repository:
 https://github.com/williamslab/genetio
-
+IBIS also requires the zlib and libpthread libraries.
 ### Supported input formats
 
 IBIS requires PLINK .bed, .bim, and .fam format data to run. PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
