@@ -850,8 +850,8 @@ int main(int argc, char **argv) {
 	struct timespec startTime;
 	clock_gettime(CLOCK_REALTIME, &startTime);
 	uint8_t **dataPointer;
-	char* VERSION_NUMBER = "1.01";
-	char* RELEASE_DATE = "October 23, 2019";
+	char* VERSION_NUMBER = "1.02";
+	char* RELEASE_DATE = "October 24, 2019";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 	int *bytesPerMarker;
 
@@ -906,7 +906,8 @@ int main(int argc, char **argv) {
 			printf("\n");
 			printf("\t -2 or -ibd2\t\t\t enable ibd2 analyses");
 			printf("\n");
-			printf("\t -mt <value>\t\t\t set an error threshold for leniency toward local spikes in error rate");
+			printf("\t -mt <value>\t\t\t set minimum number of markers required for acceptible segments to output.\n");
+			printf("\t\t\t\t\t Defaults to 500 markers\n");
 			printf("\n");
 			printf("\t -threads <value>\t\t set the number of threads available to IBIS for parallel processing.");
 			printf("\t\t\t\t\t Defaults to 1\n");
