@@ -861,7 +861,7 @@ int main(int argc, char **argv) {
 	std::vector<float> geneMap;
 	std::vector<int> physMap;
 	bool errors = false;
-	float min_length = 7.0/100.0, min_length2 = 3.5/100.0;
+	float min_length = 7.0, min_length2 = 3.5;
 	float windowMarkerSize = 103;
 	bool noFile = true;
 	bool ibd2 = false;
