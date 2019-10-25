@@ -60,7 +60,8 @@ IBIS options:
 	* Specify a minimum number of markers required for a segment to be printed.
 * -threads \<value\>                
 	* set the number of threads available to IBIS for parallel processing.
-
+* -gzip
+	* Have the progrem output gzipped segment files.
 ## License
 
 This project is licensed under the GPL-3.0 - see the [LICENSE](LICENSE) file for details

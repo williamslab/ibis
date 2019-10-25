@@ -850,7 +850,7 @@ int main(int argc, char **argv) {
 	struct timespec startTime;
 	clock_gettime(CLOCK_REALTIME, &startTime);
 	uint8_t **dataPointer;
-	char* VERSION_NUMBER = "1.02";
+	char* VERSION_NUMBER = "1.03";
 	char* RELEASE_DATE = "October 24, 2019";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 	int *bytesPerMarker;
@@ -912,6 +912,7 @@ int main(int argc, char **argv) {
 			printf("\t -threads <value>\t\t set the number of threads available to IBIS for parallel processing.");
 			printf("\t\t\t\t\t Defaults to 1\n");
 			printf("\n");
+			printf("\t -gzip \t\t\t\t have the program output gzipped segment files\n");
 			printf("OUTPUT FORMAT:\n");
 			printf("sample1\tsample2\tibdType\tchrom\tphys_start_pos\tphys_end_pos\tstart_marker\tend_marker\tgen_start_pos\tgen_end_pos\tseg_length\tmarker_count\tdebug_data\tdebug_data\n");
 			printf("\t\n");
