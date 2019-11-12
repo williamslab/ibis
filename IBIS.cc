@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <string.h>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include <cmath>
 #include <omp.h>
@@ -20,6 +21,8 @@
 #include <time.h>
 #include <zlib.h>
 #include <stdarg.h>
+#include <map>
+
 //#include <gstream/gstream.h>
 
 /*struct bData{
@@ -380,15 +383,11 @@ void handleIBD1PostIBD2(int &startPos, int &endPos, int &lastStartPos, int &last
 }
 
 
-/*void ibd1CatchUp(std::vector<segData> &ibd1Holder, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FILE *pFile){
-
-  }*/
+//CHeck for a valid IBD1 segment in either the stored segment or the ongoing one and print them if valid.
 template<class IO_TYPE>
 bool forceEndSegment(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, float min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount, int ibdType, int chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, bool noMerge){
 
-	//if(indiv1==1805 && indiv2==1806)
-        //	printf("check problem here\n");
-                                       
+
 
 
 	bool printed = false;
@@ -410,12 +409,10 @@ bool forceEndSegment(int &startPos, int &endPos, int &lastStartPos, int &lastEnd
 	return printed;
 }
 
-
+//CHeck for a valid IBD2 segment in either the stored segment or the ongoing one and print them if valid.
 template<class IO_TYPE>
 bool forceEndSegment2(int &startPos2, int &endPos2, int &lastStartPos2, int &lastEndPos2, float &startFloat2, float &endFloat2, float &lastStartFloat2, float &lastEndFloat2, float min_length2, int min_markers2, float &errorCount2, float &lastErrorCount2, int &lastWindowErrorCount2, int chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, int min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount,bool noMerge){
 
-	//if(indiv1==1805 && indiv2==1806)
-        //        printf("check problem here\n");
 	bool printed = false;
 	bool merged = mergeSegments(startPos2, endPos2, lastStartPos2, lastEndPos2, startFloat2, endFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, 2, realIBD2, realIBD2New, noMerge);
 	int segMarkerLength = lastEndPos2-lastStartPos2;
@@ -448,7 +445,6 @@ bool forceEndSegment2(int &startPos2, int &endPos2, int &lastStartPos2, int &las
 			startPos2=-100;
 			endPos2=-100;
 			startFloat2=-1;
-			//endFloat-1; TODO Check this.
 			errorCount2=0;
 			handleIBD1PostIBD2<IO_TYPE>(startPos, endPos, lastStartPos, lastEndPos, startFloat, endFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, startPos2, endPos2, lastStartPos2, lastEndPos2, startFloat2, endFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
 		}
@@ -538,26 +534,30 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 
 	printf("Organizing genotype data for analysis... "); 
 	fflush(stdout);
-	uint64_t blocks = indBlocks;
+	uint64_t blocks = indBlocks;//Unnecessary name change, represents number of 64-wise blocks of individuals in the input.
 	uint64_t dataBlocks = ceil((float)individuals/4);
-	uint64_t bytesToBlocks = bytes/8;
-
+	uint64_t bytesToBlocks = bytes/8;//Removed the purpose for this november 9th, 2019, I think.
 
 	uint64_t newMarkerBlocks = 2*(ceil((float)markers/64));//two for each set of 64 markers.
 	//uint64_t homMask = 3;
 	uint64_t mask1 = 1;
 
-	for (uint64_t b = 0; b < bytesToBlocks; b++) {
+
+
+
+	for (uint64_t b = 0; b < newMarkerBlocks; b++) {
 
 		for (uint64_t i = 0; i < individuals; i++) {
-			transposedData[i*bytesToBlocks+b]=0;//I believe it must be zero'd at some point. POSSIBLE SUBOPTIMAL
-			missingData[i*bytesToBlocks+b]=0;//TODO BAD! SLOW! FUSE TWO LATER A BETTER WAY!
+			transposedData[i*newMarkerBlocks+b]=0;//I believe it must be zero'd at some point. POSSIBLE SUBOPTIMAL
+			//std::cerr<<"zeroing: "<<i*newMarkerBlocks+b<<"\n";	
+			missingData[i*newMarkerBlocks+b]=0;//TODO BAD! SLOW! FUSE TWO LATER A BETTER WAY!
 		}
 	}
 	for (uint64_t b = 0; b < blocks; b++) {//TODO: confirm if possible breaking point for uk biobank
-
+		//printf("blocks:%i out of %i\n",b,blocks);
 		for (uint64_t m = 0; m < markers; m++) {
 			uint64_t *data64 = (uint64_t *)(data+dataBlocks*m);
+
 			uint8_t *data8 = data+dataBlocks*m;
 			uint64_t individuals1;
 			uint64_t individuals2;
@@ -570,18 +570,19 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 					individuals1 = 0;
 					individuals2 = 0;
 					int count = 0;
-					for (uint64_t x = (individuals / 4); x>=b*16; x--) {//TODO: confirm if possible breaking point for uk biobank
+					for (uint64_t x = floor((individuals-1) / 4); x>=b*16; x--) {//TODO: confirm if possible breaking point for uk biobank
 						individuals1 = individuals1 << 8;
 						individuals1 += data8[x];
-
+						//printf("x: %i b: %i m: %i index: %i\n",x,b,m,x+dataBlocks*m);
 						count++;
 					}
+					//printf("Complete set of <=8?\n");
 				}
 				else{
 					individuals1 = data64[b * 2];
 					individuals2 = 0;
 					int count = 0;
-					for (uint64_t x = (individuals / 4); x>=b*16+8; x--) {//TODO: confirm if possible breaking point for uk biobank
+					for (uint64_t x = floor((individuals-1) / 4); x>=b*16+8; x--) {//TODO: confirm if possible breaking point for uk biobank
 						individuals2 = individuals2 << 8;
 						individuals2 += data8[x];
 
@@ -614,13 +615,13 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 				uint64_t hom1Shift = hom1<<newShift;
 				transposedData[newIndex]+=hom1Shift;
 
-
 				uint64_t hom2Shift = hom2<<newShift;
 				transposedData[newIndex+1]+=hom2Shift;
 
 				uint64_t missShift = missBits<<newShift;
 				missingData[newIndex]+=missShift;
 				missingData[newIndex+1]+=missShift;
+
 			}
 			for(uint64_t indivShift=32; indivShift<64; indivShift++){
 				uint64_t indiv = indivShift+(b * 64);
@@ -643,10 +644,10 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 				uint64_t hom2Shift = hom2<<newShift;
 				transposedData[newIndex+1]+=hom2Shift;
 
-
 				uint64_t missShift = missBits<<newShift;
 				missingData[newIndex]+=missShift;
 				missingData[newIndex+1]+=missShift;
+
 			}
 
 		}
@@ -654,16 +655,28 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 	printf("done.\n");
 }
 
+
+
+//Loop over the individuals and windows and perform the segment analysis.
 template<class IO_TYPE>
-void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingData, int numIndivs, int indBlocks, int numMarkers, int markBytes, int markBlocks, std::vector<int> &starts, std::vector<int> &ends, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, std::string filename, std::string extension, bool noMerge, int chrom, int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, bool ibd2, int numThreads){	
+void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingData, int numIndivs, int indBlocks, int numMarkers, int markBytes, int markBlocks, std::vector<int> &starts, std::vector<int> &ends, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, std::string filename, std::string extension, bool noMerge, int chrom, int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, int numThreads){	
+	
+	//These locks are unnecessary with multiple output files.
 	omp_lock_t lock;
 	omp_init_lock(&lock);
+	
 
+	//Transposes the input matrix and handles the 8->64 bit format conversion..
 	interleaveAndConvertData(data, transposedData, missingData, indBlocks, numMarkers, markBytes, numIndivs, starts, ends, geneMap);
+
+
 	omp_set_dynamic(0);     // Explicitly disable dynamic teams
-	omp_set_num_threads(numThreads); // Use 4 threads for all consecutive parallel region
+	omp_set_num_threads(numThreads); //Forces input specified thread number with default 1. 
+
 	printf("Beginning segment detection with %i thread(s)...",numThreads);
 	fflush(stdout);
+
+//Begin parallelization
 #pragma omp parallel
 	{
 		std::string threadname;
@@ -675,34 +688,40 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 			perror("open");
 			exit(1);
 		}
-		//std::cout<<threadname.c_str()<<"\n";
 
-		/*else{
-		  pFile = pFile0;
-		  }*/
+//Grouping loop contents per parallelization, even though the individual threads start before this point.
+//
+//NOTE: -100 is used as a placeholder for marker positions of invalid start and endpoints to prevent merge from being viable with them, as merge cannot bridge gaps between a real position and something that far before 0 regardless of circumstance.
 #pragma omp for schedule(dynamic, 10)
 		for(uint64_t indiv1=0; indiv1<numIndivs; indiv1++){
 			for(uint64_t indiv2=indiv1+1; indiv2<numIndivs; indiv2++){
-				//if(strcmp(names[indiv1].c_str(),"103_A01675")==0 && strcmp(names[indiv2].c_str(),"103_A14129")==0)
-				//	int testvar=0;
+				
 				int startPos = 0;//NOTE! THIS ALLOWS ERRORS IN THE VERY FIRST WINDOW! TODO
-				float startFloat = geneMap[startPos];
-				float errorCount = 0;
-				int lastErrorFree = -100;
-				float lastErrorFreeFloat = -1;
+				float startFloat = geneMap[startPos];//genetic start position of ongoing segment.
+				float errorCount = 0;//error count of ongoing segment.
+				int lastErrorFree = -100;//position of last error free window. Used to backtrack segment endings to the last error free window.
+				float lastErrorFreeFloat = -1;//genetic position of the last error free window. NOTE: not part of the "last" group of variables referring to the previous stored segment.
 				float prevDensity = -1;
 
+
+				//Variables for storing data of the previous segment. Necessary for merging.			
 				int lastStartPos = -100;//avoids marker merge issues
 				int lastEndPos = -100;
 				float lastEndFloat = -1;
 				float lastStartFloat=-1;
 				float lastErrorCount = 0;
-				int lastWindowErrorCount = 0;
-				int windowErrorCount = 0;
+				int lastWindowErrorCount = 0;//Part of merge
 
-				bool realIBD2 = false; //Used to force print short IBD1 segments when attached to a real IBD2 segment.
-				bool realIBD2New = false;
 
+				int windowErrorCount = 0;//Part of merge.
+				
+
+				//Used to force print short IBD1 segments when attached to a real IBD2 segment.
+				bool realIBD2 = false; //For IBD2-linked ongoing segments.
+				bool realIBD2New = false; //Temporary holder for IBD2-linked status of new IBD1 segments created when an IBD2 segment split an ongoing IBD1 segment.
+
+
+				//IBD2 equivalents of the previously described variables.
 				int startPos2 = 0;//NOTE! THIS ALLOWS ERRORS IN THE VERY FIRST WINDOW! TODO
 				float startFloat2 = geneMap[startPos];
 				float errorCount2 = 0;
@@ -719,7 +738,6 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 				int windowErrorCount2 = 0;
 
 
-				//			std::vector<SegData> ibd1Holder;
 
 
 
@@ -727,22 +745,35 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 
 				for(uint64_t markerBlock=0; markerBlock<markBlocks; markerBlock++){
 
-
-					//if(indiv1==1805 && indiv2==1806 && geneMap[starts[markerBlock]]>240.1/100.0)
-					//	printf("check problem here\n");
-					//if(indiv1==1805 && indiv2==1806 && geneMap[starts[markerBlock]]>260.0/100.0)
-                                        //        printf("check problem here\n");
+					//Booleans for the status of the IBD conclusions for the current window comparison.
 					bool isIBD1;
 					bool isIBD2;
+					
+
+					//Booleans for error status of the current window
 					bool hasError;
 					bool hasError2;
 
+
+					//Locations of the two windows for comparison in the binary data.
 					uint64_t index1 = findIndex(markerBlock, indiv1, markBlocks);
 					uint64_t index2 = findIndex(markerBlock, indiv2, markBlocks);
 
-					compareWindowsIBD1(transposedData[index1], transposedData[index1+1], transposedData[index2], transposedData[index2+1], hasError, windowErrorCount, isIBD1);
+
+
+					//Finds the two homozygous sets for each individual.
+					uint64_t tDataI1_1 = transposedData[index1];//first individual, first homozygous set
+					uint64_t tDataI1_2 =  transposedData[index1+1];//first individual, second homozygous set
+					uint64_t tDataI2_1 = transposedData[index2];//second individual, first homozygous set
+					uint64_t tDataI2_2 =  transposedData[index2+1];//second individual, second homozygous set.
+
+
+
+					compareWindowsIBD1(tDataI1_1, tDataI1_2, tDataI2_1, tDataI2_2, hasError, windowErrorCount, isIBD1);
+
+					//Don't bother checking IBD2 if there are too many errors in IBD1.
 					if(ibd2 && windowErrorCount<3){
-						compareWindowsIBD2(transposedData[index1], transposedData[index1+1], transposedData[index2], transposedData[index2+1], missingData[index1], missingData[index2], hasError2, windowErrorCount2, isIBD2);
+						compareWindowsIBD2(tDataI1_1, tDataI1_2, tDataI2_1, tDataI2_2, missingData[index1], missingData[index2], hasError2, windowErrorCount2, isIBD2);
 					}
 					else{
 						isIBD2=false;
@@ -750,29 +781,26 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 						hasError2=false;
 					}
 
-					/*if(strcmp(names[indiv1].c_str(),"801101")==0 && strcmp(names[indiv2].c_str(),"801114")==0 && physMap[starts[markerBlock]]==249210707){
-					  int testVar = 0;
-					  }
-					  if(strcmp(names[indiv1].c_str(),"808101")==0 && strcmp(names[indiv2].c_str(),"801114")==0 && physMap[ends[markerBlock]]==249210707){
-					  int testVar = 0;
-					  }*/
 
-					if(ibd2){
-						if(isIBD2){
-							int endPos2 = ends[markerBlock];
+					if(ibd2){//The check for if IBD2 is enabled
+						if(isIBD2){//The check for if the window is IBD2
+		
+							int endPos2 = ends[markerBlock];//Set the endpos if the current window is the end of a segment.
 
 							if(hasError2 && startPos2 != -100){
 								errorCount2++;
-								if((errorCount2 / (endPos2 - startPos2)) > errorThreshold){
+								//Error rate in ongoing segment check.
+								if((errorCount2 / (endPos2 - startPos2)) > errorThreshold2){
+									//Terminate ongoing IBD2 segment. Tracks if a segment was actually produced with validMerge.
 									bool validMerge = endSegment(startPos2, lastErrorFree2, lastStartPos2, lastEndPos2, startFloat2, lastErrorFreeFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, 2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
-									lastWindowErrorCount = windowErrorCount;
-									if(validMerge){
+									lastWindowErrorCount = windowErrorCount;//Tracks this for merge purposes. 
+									if(validMerge){//If a segment really did get produced and printed, deals with the stored and ongoing iBD1 segments based on the position of the IBD2 segment.
 										handleIBD1PostIBD2(startPos, lastErrorFree, lastStartPos, lastEndPos, startFloat, lastErrorFreeFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, startPos2, lastErrorFree2, lastStartPos2, lastEndPos2, startFloat2, lastErrorFreeFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
 									}
 								}
 
 							}
-							else if(!hasError2){
+							else if(!hasError2){//If error free, no checks to error density need to be made here.
 								if(startPos2 == -100){
 									startPos2 = starts[markerBlock];
 									startFloat2 = geneMap[starts[markerBlock]];
@@ -783,7 +811,7 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 							}
 
 						}
-						else if(startPos2!=-100){
+						else if(startPos2!=-100){//If no valid IBD2 was found, attempt to terminate the segment.
 							bool validMerge = endSegment(startPos2, lastErrorFree2, lastStartPos2, lastEndPos2, startFloat2, lastErrorFreeFloat2, lastStartFloat2,lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, 2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
 							if(validMerge){
 								handleIBD1PostIBD2(startPos, lastErrorFree, lastStartPos, lastEndPos, startFloat, lastErrorFreeFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, startPos2, lastErrorFree2, lastStartPos2, lastEndPos2, startFloat2, lastErrorFreeFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
@@ -792,7 +820,6 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 						}
 					}
 
-					//lastWindowErrorCount = windowErrorCount;
 
 
 
@@ -803,6 +830,7 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 							errorCount++;
 							float currentErrorDensity = (errorCount / (endPos - startPos));
 							if((errorCount / (endPos - startPos)) > errorThreshold){
+								//Terminates IBD2 segment if the IBD1 segment error density underneath it is too high.
 								if(isIBD2){
 									bool validMerge = endSegment(startPos2, lastErrorFree2, lastStartPos2, lastEndPos2, startFloat2, lastErrorFreeFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, 2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
 									lastWindowErrorCount = windowErrorCount;
@@ -831,10 +859,13 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 						lastWindowErrorCount = windowErrorCount;
 					}
 				}
+				//Handle the end of chromosomes, as there is no end of IBD or error density increase to trigger these segments to print otherwise.
 				if(startFloat!=-1 || lastStartFloat!=-1 || startFloat2!=-1 || lastStartFloat2!=-1){//TODO put back forced
 					if(ibd2){
+						//Attempt to print IBD2 at the end of the chromosome if there is a valid segment.
 						forceEndSegment2(startPos2, lastErrorFree2, lastStartPos2, lastEndPos2, startFloat2, lastErrorFreeFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, startPos, lastErrorFree, lastStartPos, lastEndPos, startFloat, lastErrorFreeFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, noMerge);
 					}
+					//Attempt to print IBD1 at the end of the chromosome if there is a valid segment.
 					forceEndSegment(startPos, lastErrorFree, lastStartPos, lastEndPos, startFloat, lastErrorFreeFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, 1, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
 				}
 			}
@@ -845,78 +876,82 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 }
 
 
+//Consistent Print Statement for usage.
+void printUsageAndExit(){
+
+	printf("REQUIRED ARGUMENTS:\n");
+	printf("\t EITHER:\n");
+	printf("\t First Three Arguments [bed file] [bim file] [fam file]\t\tSpecifies the plink format files for the data by specific name.\n");
+	printf("\t\t\t\t\t Must be first 3 arguments.\n");
+	printf("\t OR:\n");
+	printf("\t -b [prefix] or -bfile [prefix]\t\tSpecifies the prefix to be used with prefix.bed, prefix.bim, and prefix.fam for the plink format input.\n");
+	printf("\t\t\t\t\t Does not need to be first argument\n.");
+	printf("\n");
+	printf("OPTIONS:\n");
+	printf("\t-mL or -min_l <value>\t\t Specify minimum length for acceptible segments to output.\n");
+	printf("\t\t\t\t\t Defaults to 7 centimorgans.\n");
+	printf("\t-er or -errorRate <value> \t specify acceptible error rate in a segment before considering it false.\n");
+	printf("\t\t\t\t\t Defaults to .004 errors per marker\n");
+	printf("\t -f or file <filename>\t\t Specify output file.\n");
+	printf("\t\t\t\t\t Defaults to ibis<thread number>.seg and will output a separate output file for each thread.\n");
+	printf("\t -m or -merge\t\t\t allows internal merging of segments over gaps caused by potential errors.");
+	printf("\n");
+	printf("\t -2 or -ibd2\t\t\t enable ibd2 analyses");
+	printf("\n");
+	printf("\t -mt <value>\t\t\t set minimum number of markers required for acceptible segments to output.\n");
+	printf("\t\t\t\t\t Defaults to 500 markers\n");
+	printf("\n");
+	printf("\t -threads <value>\t\t set the number of threads available to IBIS for parallel processing.");
+	printf("\t\t\t\t\t Defaults to 1\n");
+	printf("\n");
+	printf("\t -gzip \t\t\t\t have the program output gzipped segment files\n");
+	printf("OUTPUT FORMAT:\n");
+	printf("sample1\tsample2\tchrom\tphys_start_pos\tphys_end_pos\tIBD_type\tgen_start_pos\tgen_end_pos\tseg_length\tmarker_count\tdebug_data\tdebug_data\n");
+	printf("\t\n");
+	exit(1);
+
+
+}
+
 int main(int argc, char **argv) {
 
-	struct timespec startTime;
+	struct timespec startTime;//Relic of internal timing from BSQUID
 	clock_gettime(CLOCK_REALTIME, &startTime);
 	uint8_t **dataPointer;
-	char* VERSION_NUMBER = "1.03";
-	char* RELEASE_DATE = "October 24, 2019";
+	char* VERSION_NUMBER = "1.05";
+	char* RELEASE_DATE = "November 10, 2019";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
-	int *bytesPerMarker;
+	int *bytesPerMarker;//Removed use during last round of debugging. May be unneeded. 
 
-	uint64_t numIndivs, numMarkers;
+	uint64_t numIndivs, numMarkers;//counts of input quantities.
 	std::vector<std::string> names;
 	std::vector<std::string> SNPID;
-	std::vector<float> geneMap;
-	std::vector<int> physMap;
-	bool errors = false;
-	float min_length = 7.0, min_length2 = 3.5;
-	float windowMarkerSize = 103;
-	bool noFile = true;
-	bool ibd2 = false;
-	bool noMerge = true;
-	bool bFileNamesGiven = false;
-	bool distForce = false;
-	bool gzip = false;
-	float errorDensityThreshold = 0.004;
-	float min_markers = 500, min_markers2 = 250;
-	int chrom = -1;
-	int numThreads;
+	std::vector<float> geneMap;//Genetic map of input
+	std::vector<int> physMap;//Physical map of input
+	bool errors = false;//Curently unused. Errors mandatory.
+	float min_length = 7.0, min_length2 = 2.0;//cM minimum lengths
+	float windowMarkerSize = 103;//Currently unused.
+	bool noFile = true;//Check if no input file is given.
+	bool ibd2 = false;//Check if IBD2 is requested.
+	bool noMerge = true;//Default of not using merge.
+	bool bFileNamesGiven = false;//Toggle for input as one argument or 3.
+	bool distForce = false;//If true, stops the program from converting the input to cM.
+	bool gzip = false;//If True, gzips the output.
+	float errorDensityThreshold = 0.004, errorDensityThreshold2 = 0.008;//Maximum allowed error rates.
+	float min_markers = 500, min_markers2 = 195;//Marker minimums for segments.
+	int chrom = -1;//Checks for specified chromosome. Optional, but required if the input contains multiple chromosomes.
+	int numThreads;//Input threadnumber.
 	numThreads=0;
-	std::string filename, extension;
-	char bfileNameBed[100],bfileNameBim[100],bfileNameFam[100];
+	std::string filename, extension;//For building the output file.
+	char bfileNameBed[100],bfileNameBim[100],bfileNameFam[100];//locations for input filenames.
 
 
-	/*	if (argc < 3) {
-		printf("Usage: %s [bed file] [bim file] [fam file] <-e for error usage>\n", argv[0]);
-		exit(1);
-		}*/
 	printf("Viewing arguments...\n");
 	fflush(stdout);
 	for (int i = 0; i < argc; ++i) {
 		std::string arg = argv[i];
 		if ((arg == "-h") || (arg == "-help")) {
-			printf("REQUIRED ARGUMENTS:\n");
-			printf("\t EITHER:\n");
-			printf("\t First Three Arguments [bed file] [bim file] [fam file]\t\tSpecifies the plink format files for the data by specific name.\n");
-			printf("\t\t\t\t\t Must be first 3 arguments.\n");
-			printf("\t OR:\n");
-			printf("\t -b [prefix] or -bfile [prefix]\t\tSpecifies the prefix to be used with prefix.bed, prefix.bim, and prefix.fam for the plink format input.\n");
-			printf("\t\t\t\t\t Does not need to be first argument\n.");
-			printf("\n");
-			printf("OPTIONS:\n");
-			printf("\t-mL or -min_l <value>\t\t Specify minimum length for acceptible segments to output.\n");
-			printf("\t\t\t\t\t Defaults to 7 centimorgans.\n");
-			printf("\t-er or -errorRate <value> \t specify acceptible error rate in a segment before considering it false.\n");
-			printf("\t\t\t\t\t Defaults to .004 errors per marker\n");
-			printf("\t -f or file <filename>\t\t Specify output file.\n");
-			printf("\t\t\t\t\t Defaults to ibis<thread number>.seg and will output a separate output file for each thread.\n");
-			printf("\t -m or -merge\t\t\t allows internal merging of segments over gaps caused by potential errors.");
-			printf("\n");
-			printf("\t -2 or -ibd2\t\t\t enable ibd2 analyses");
-			printf("\n");
-			printf("\t -mt <value>\t\t\t set minimum number of markers required for acceptible segments to output.\n");
-			printf("\t\t\t\t\t Defaults to 500 markers\n");
-			printf("\n");
-			printf("\t -threads <value>\t\t set the number of threads available to IBIS for parallel processing.");
-			printf("\t\t\t\t\t Defaults to 1\n");
-			printf("\n");
-			printf("\t -gzip \t\t\t\t have the program output gzipped segment files\n");
-			printf("OUTPUT FORMAT:\n");
-			printf("sample1\tsample2\tchrom\tphys_start_pos\tphys_end_pos\tIBD_type\tgen_start_pos\tgen_end_pos\tseg_length\tmarker_count\tdebug_data\tdebug_data\n");
-			printf("\t\n");
-			exit(1);
+			printUsageAndExit();
 		}
 		else if( arg == "-b" || arg == "-bfile"){
 			bFileNamesGiven = true;
@@ -938,9 +973,19 @@ int main(int argc, char **argv) {
 			min_length2 = min_length/2.0;
 			printf("%s - running with minimum IBD1 length %f and minimum IBD2 length %f\n",arg.c_str(),min_length,min_length2);
 		}
+		else if (arg == "-mL2" || arg == "-min_l2") {
+			min_length2 =  atof(argv[i + 1]);
+			printf("%s - running with minimum IBD2 length %f\n",arg.c_str(),min_length2);
+		}
 		else if( arg =="-er" || arg == "-errorRate"){
 			errorDensityThreshold=atof(argv[i+1]);
-			printf("%s - running with error rate %f\n",arg.c_str(), errorDensityThreshold);
+			errorDensityThreshold2=errorDensityThreshold*2;
+			printf("%s - running with error rate %f, IBD2 error rate %f\n",arg.c_str(), errorDensityThreshold, errorDensityThreshold2);
+		}
+		else if(arg =="-er2" || arg == "-errorRate2"){
+			errorDensityThreshold2=atof(argv[i+1]);
+			printf("%s - running with error rate %f\n",arg.c_str(), errorDensityThreshold2);
+
 		}
 		else if( arg =="-f" || arg == "-file"){
 			std::string fileTemp(argv[i+1]);
@@ -954,7 +999,11 @@ int main(int argc, char **argv) {
 			min_markers=atoi(argv[i+1]);
 			min_markers2=min_markers/2.0;
 			printf("%s - running with minimum IBD1 marker threshold of %f and minimum IBD2 marker threshold of %f\n",arg.c_str(), min_markers,min_markers2);
+		} else if(arg=="-mt2"){
+			min_markers2=atoi(argv[i+1]);
+			printf("%s - running with minimum IBD2 marker threshold of %f\n",arg.c_str(), min_markers2);
 		}
+
 		else if(arg =="-chr"){
 			chrom = atof(argv[i+1]);
 			printf("%s - running on chromosome %i\n",arg.c_str(),chrom);
@@ -976,44 +1025,11 @@ int main(int argc, char **argv) {
 			printf("%s - running with %i threads\n",arg.c_str(), numThreads);
 		}
 		else if(arg.at(0)=='-'){
-			printf("Unknown option: %s\n",arg.c_str());
-			printf("Usage:\n");
-			printf("REQUIRED ARGUMENTS:\n");
-			printf("REQUIRED ARGUMENTS:\n");
-                        printf("\t EITHER:\n");
-                        printf("\t First Three Arguments [bed file] [bim file] [fam file]\t\tSpecifies the plink format files for the data by specific name.\n");
-                        printf("\t\t\t\t\t Must be first 3 arguments.\n");
-                        printf("\t OR:\n");
-                        printf("\t -b [prefix] or -bfile [prefix]\t\tSpecifies the prefix to be used with prefix.bed, prefix.bim, and prefix.fam for the plink format input.\n");
-                        printf("\t\t\t\t\t Does not need to be first argument\n.");
-                        printf("\n");
-                        printf("OPTIONS:\n");
-                        printf("\t-mL or -min_l <value>\t\t Specify minimum length for acceptible segments to output.\n");
-                        printf("\t\t\t\t\t Defaults to 7 centimorgans.\n");
-                        printf("\t-er or -errorRate <value> \t specify acceptible error rate in a segment before considering it false.\n");
-                        printf("\t\t\t\t\t Defaults to .004 errors per marker\n");
-                        printf("\t -f or file <filename>\t\t Specify output file.\n");
-                        printf("\t\t\t\t\t Defaults to ibis<thread number>.seg and will output a separate output file for each thread.\n");
-                        printf("\t -m or -merge\t\t\t allows internal merging of segments over gaps caused by potential errors.");
-                        printf("\n");
-                        printf("\t -2 or -ibd2\t\t\t enable ibd2 analyses");
-                        printf("\n");
-                        printf("\t -mt <value>\t\t\t set minimum number of markers required for acceptible segments to output.\n");
-                        printf("\t\t\t\t\t Defaults to 500 markers\n");
-                        printf("\n");
-                        printf("\t -threads <value>\t\t set the number of threads available to IBIS for parallel processing.");
-                        printf("\t\t\t\t\t Defaults to 1\n");
-                        printf("\n");
-                        printf("\t -gzip \t\t\t\t have the program output gzipped segment files\n");
-                        printf("OUTPUT FORMAT:\n");
-                        printf("sample1\tsample2\tchrom\tphys_start_pos\tphys_end_pos\tIBD_type\tgen_start_pos\tgen_end_pos\tseg_length\tmarker_count\tdebug_data\tdebug_data\n");
-                        printf("\t\n");
-			exit(1);
+			printUsageAndExit();
 		}
 
 	}
 	if(noFile){
-		//pFile0 = stdout;//fopen ("outfile.txt","w");
 		std::cout<<"No input file given. Defaulting filenames to \"ibis<thread number>.seg\"\"\n";
 		std::string fileTemp("ibis");
 		filename = fileTemp;
@@ -1034,36 +1050,35 @@ int main(int argc, char **argv) {
 
 	PersonBulk::getBulkContainers(dataPointer, bytesPerMarker);
 	numIndivs = PersonBulk::_allIndivs.length();
-	float errorThreshold = errorDensityThreshold; //1.0/100000000.0;
+
+	//Name change here for error thresholds.
+	float errorThreshold = errorDensityThreshold; 
+	float errorThreshold2 = errorDensityThreshold2;
 	uint8_t *data = *dataPointer;
 
 
-
+	
 	numMarkers = Marker::getNumMarkers();
 	uint64_t markBytes = ceil(((float)numMarkers * 2) / (8 * sizeof(uint8_t)));
 	uint64_t indBlocks = ceil((float)(numIndivs) / 64); //blocks are based on the number of individuals
 	uint64_t markBlocks = ceil((float)(numMarkers) / 64);
-	//FILE *indIn = fopen(argv[3], "r");
-	//FILE *SNPinfo = fopen(argv[2], "r");
+	
+
 	for (uint64_t x = 0; x < numIndivs; x++) {
-		//fscanf(indIn, "%*s %s %*s %*s %*s %*s", n1);
 		names.push_back(PersonBulk::_allIndivs[x]->getId());
 	}
-	const char* chromTemp1;
+	const char* chromTemp1;//Used to track of the chromosome has changed at some point in the input.
 	const char* chromTemp2;
 	chromTemp2 = chromTemp1;
 	for(int x = 0; x<numMarkers; x++){
-		/*int val = fscanf(SNPinfo, "%i %s %f %i %*s %*s",&chrom, s1, &f1, &pP);
-		  if (val == EOF)
-		  break;
-		  if(f1>0.0 && pP>0.0){*/
 		chromTemp1 = Marker::getMarker(x)->getChromName();
+		//If multiple chromosomes are in the input and no chromosome to process was specified, terminate.
 		if(x > 0 && chrom==-1 && strcmp(chromTemp1,chromTemp2)!=0){
 			printf("ERROR: File includes multiple chromosomes but no chromosome specified in input: \n %s and %s chromosomes found.\n", chromTemp2, chromTemp1);
 			exit(1);
 		}
 		chromTemp2=chromTemp1;
-		if(chrom!=-1 && chrom!=atoi(chromTemp1)){
+		if(chrom!=-1 && chrom!=atoi(chromTemp1)){//Skip chromosomes that aren't specified when there are multiple in the input.
 			continue;
 		}
 
@@ -1071,7 +1086,6 @@ int main(int argc, char **argv) {
 		geneMap.push_back(Marker::getMarker(x)->getMapPos());
 		physMap.push_back(Marker::getMarker(x)->getPhysPos());
 
-		//}
 	}
 	if(geneMap.size()==0){
 		printf("ERROR! No SNPS remain in analysis. Check that your input contains a genetic map and your chromosome of choice exists in your input files.\n Chromosome specified by user: %i, last chromosome detected: %s\n",chrom, chromTemp2);
@@ -1080,6 +1094,8 @@ int main(int argc, char **argv) {
 	chrom = atoi(chromTemp1);
 
 	printf("Total SNPs: %i\n", geneMap.size());
+	
+	//Convert to cM if the input genetic map seems to be too short.
 	if(!distForce){
 		float len = geneMap.back() - geneMap.front();
 		if(len < 49.0){
@@ -1109,7 +1125,7 @@ int main(int argc, char **argv) {
 
 
 
-	windowMarkerSize=64;//TODO: CHANGE!
+	windowMarkerSize=64;//TODO: Variable windows.
 
 
 
@@ -1125,20 +1141,11 @@ int main(int argc, char **argv) {
 			homs.push_back(0);
 			ndChnged = false;
 		}
-		//if(markersForWindows){
 		if (m-start>=windowMarkerSize){
 			end = m-1;
 			ends.push_back(end);
 			ndChnged = true;
 		}
-		//}
-		//else{
-		//	if((geneMap[m] - geneMap[start]) >= windowMorganSize){
-		//		end= m-1;
-		//		ends.push_back(end);
-		//		ndChnged = true;
-		//	}
-		//}
 	}
 
 	if (ends[(ends.size() - 1)] != (numMarkers - 1)) {
@@ -1150,14 +1157,15 @@ int main(int argc, char **argv) {
 			ends.push_back(numMarkers - 1);
 		}
 	}
+
 	printf("done.\n");
 	if(gzip){
 		extension = ".seg.gz";
-		segmentAnalysis<gzFile>(data, transposedData, missingData, numIndivs, indBlocks, numMarkers, markBytes, markBlocks, starts, ends, names, SNPID, geneMap, physMap, filename, extension, noMerge, chrom, min_markers, min_length, min_markers2, min_length2, errorThreshold, ibd2, numThreads);	
+		segmentAnalysis<gzFile>(data, transposedData, missingData, numIndivs, indBlocks, numMarkers, markBytes, markBlocks, starts, ends, names, SNPID, geneMap, physMap, filename, extension, noMerge, chrom, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, numThreads);	
 	}
 	else{
 		extension = ".seg";
-		segmentAnalysis<FILE *>(data, transposedData, missingData, numIndivs, indBlocks, numMarkers, markBytes, markBlocks, starts, ends, names, SNPID, geneMap, physMap, filename, extension, noMerge, chrom, min_markers, min_length, min_markers2, min_length2, errorThreshold, ibd2, numThreads);	
+		segmentAnalysis<FILE *>(data, transposedData, missingData, numIndivs, indBlocks, numMarkers, markBytes, markBlocks, starts, ends, names, SNPID, geneMap, physMap, filename, extension, noMerge, chrom, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, numThreads);	
 	}
 
 
