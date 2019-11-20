@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <genetio/marker.h>
 #include <genetio/personbulk.h>
+#include <genetio/personloopdata.h>
 #include <genetio/personio.h>
 #include <genetio/util.h>
 #include <iostream>
@@ -23,36 +24,6 @@
 #include <stdarg.h>
 #include <map>
 
-//#include <gstream/gstream.h>
-
-/*struct bData{
-  uint64_t allelePres[2];
-  uint64_t missing;
-  };*/
-
-/*struct SegData{
-  int startPos;
-  int endPos;
-  int errorCount;
-
-  void update(int newEnd, int newErrors){
-  endPos=newEnd;
-  errorCount+=newErrors;
-  }
-
-  bool cleave(int ibd2Start, ibd2End){
-  bool startIn = false; endIn=false;
-  if(startPos>ibd2Start && startPos<ibd2End){
-  startPos=ibd2End;
-  startIn=true;
-  }
-  if(endPos>ibd2Start && endPos<ibd2End){
-  endPos=ibd2Start;
-  endIn=true;
-  }
-  return !(endIn && startIn);
-  }
-  }*/
 template<typename IO_TYPE>
 class FileOrGZ {
 	public:
@@ -222,32 +193,37 @@ template<>
 int FileOrGZ<gzFile>::close() {
 	if (buf_len > 0)
 		gzwrite(fp, buf, buf_len);
-	//                                                                           		                                                                                                                                      	                                                                    // should free buf, but I know the program is about to end, so won't
 	return gzclose(fp);
 }
 
 
+
+//Find the lowest order non-zero bit in the uint64_t, and return it in a uint64_t with only that bit set to 1.
 inline uint64_t lowestSetBit(uint64_t bitSet)
 {
 	return (-bitSet) & bitSet;
 };
 
-
-bool segmentOverlap(int start1, int start2, int end1, int end2){
+//Determine if the two given segments overlap
+inline bool segmentOverlap(int start1, int start2, int end1, int end2){
 	return (end2 >= start1) && (end1 >= start2);//(start1 <= end1 && start1 >= start2) || (end1<=end2 && end1>=start2);
 
 }
 
-/*void sendToStream(ogztream *outStream, char *ind1, char* ind2, int ibdType, int chrom, int physStart,int physEnd, char* snpStart, char *snpEnd, float genStart, float genEnd, float length, int markerLength, int lastErrorCount, float errorDensity){
+
+//Future cosmetic project for print statements. May want later.
+/*void sendToStream(ogztream *outStream, char *ind1, char* ind2, int ibdType, const char* chrom, int physStart,int physEnd, char* snpStart, char *snpEnd, float genStart, float genEnd, float length, int markerLength, int lastErrorCount, float errorDensity){
   outStream << ind1<< "\t"<< ind2<< "\t"<< ibdType<< "\t"<< chrom<< "\t"<< physStart<< "\t"<< physEnd<< "\t"<< snpStart<< "\t"<< snpEnd<< "\t"<< genStart<< "\t"<< genEnd< "\t"<< length<< "\t"<< markerLength<< "\t"<< lastErrorCount<< "\t"<< errorDensity<<"\n";
   }*/
 
 
+//Attempts to merge the segment in storage with the ongoing segment, returns true if able. Returns false if either unable or if merge is not enabled.
+//The rest of the code is designed to not print a segment if a valid merge occurs, as future merges may be necessary, and a lot of processing is only triggered by failure to merge.
 bool mergeSegments(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, float min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount, int ibdType, bool &realIBD2, bool &realIBD2New, bool noMerge){
 
 	if(noMerge)
-		return false;
-	float min_l = .02;
+		return false;//Always the result at the moment.
+	float min_l = 2.0;//TODO Make this a function of the input?
 	if ((startFloat!=-1) && (startPos-lastEndPos < 66) && (lastWindowErrorCount < 3) && ((ibdType==1 && realIBD2) || ((lastEndFloat-lastStartFloat)>(min_l))) && ((ibdType==1 && realIBD2New) || (endFloat-startFloat >(min_l)))){
 		lastEndFloat=endFloat;
 		lastEndPos=endPos;
@@ -260,8 +236,12 @@ bool mergeSegments(int &startPos, int &endPos, int &lastStartPos, int &lastEndPo
 }
 
 
+
+//Segment termination code.
+//Tries to merge given segment with the stored "last" segment. If that fails, checks the ongoing segment against all the criteria for segment validity. If it succeeds, it prints the stored segment and stores the ongoing one in the "last" segment slot.
+//Returns a boolean describing if the segment in storage is a valid segment according to the thresholds, which, as a side effect, will also always be true if the segment just analyzed was valid.
 template<class IO_TYPE>
-bool endSegment(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, float min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount, int ibdType, int chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, bool noMerge){
+bool endSegment(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, float min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount, int ibdType, const char* chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, bool noMerge){
 	bool validMerge = false;
 	if(!mergeSegments(startPos, endPos, lastStartPos, lastEndPos, startFloat, endFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, ibdType, realIBD2, realIBD2New, noMerge)){
 		int segMarkerLength = lastEndPos-lastStartPos;
@@ -269,9 +249,7 @@ bool endSegment(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, 
 
 
 		if(lastStartPos !=-100 && segMarkerLength>0 && ((realIBD2 && ibdType==1) || ((segCMLength > min_length) && (segMarkerLength > min_markers)))){
-			pFile.printf("%s \t %s \t %i \t %i \t %i \t IBD%i \t %f \t %f \t %f \t %i \t %i \t %f\n", names[indiv1].c_str(),names[indiv2].c_str(),chrom, physMap[lastStartPos], physMap[lastEndPos],ibdType, lastStartFloat, lastEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));
-			//if(ibdType==2)
-			//realIBD2=true;//TODO redundant? Almost certainly
+			pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(),chrom, physMap[lastStartPos], physMap[lastEndPos],ibdType, lastStartFloat, lastEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));
 
 		}	
 
@@ -284,8 +262,6 @@ bool endSegment(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, 
 			realIBD2=realIBD2New;
 			realIBD2New=false;
 		}
-		//if(lastEndFloat-lastStartFloat > min_length)
-		//	validMerge=true;
 
 
 	}
@@ -297,19 +273,20 @@ bool endSegment(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, 
 		validMerge=true;
 	startPos=-100;
 	startFloat=-1;
-	if(ibdType==1)
+	if(ibdType==1)//If an IBD1 segment was printed, the realIBD2New quantity has been resolved and there is no linked real IBD2 with the ongoing segment from here on out.
 		realIBD2New=false;
 	errorCount=0;
-	//realIBD2=false;//TODO TEST! REMOVE
 	return validMerge;
 
 }
 
 //Breaks and prints underlying IBD1 segment after IBD2 segment confirmed to be real. Also updates IBD1 ongoing segment data.
 template<class IO_TYPE>
-void handleIBD1PostIBD2(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, float min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount, int &startPos2, int &endPos2, int &lastStartPos2, int &lastEndPos2, float &startFloat2, float &endFloat2, float &lastStartFloat2, float &lastEndFloat2, float min_length2, float min_markers2, float &errorCount2, float &lastErrorCount2, int &lastWindowErrorCount2, int chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, bool noMerge){
+void handleIBD1PostIBD2(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, float min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount, int &startPos2, int &endPos2, int &lastStartPos2, int &lastEndPos2, float &startFloat2, float &endFloat2, float &lastStartFloat2, float &lastEndFloat2, float min_length2, float min_markers2, float &errorCount2, float &lastErrorCount2, int &lastWindowErrorCount2, const char* chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, bool noMerge){
 
 	if(segmentOverlap(lastStartPos,lastStartPos2,lastEndPos,lastEndPos2)){
+
+		//Checking if a true IBD1 segment needs to be printed before the current IBD2 segment in the stored segment slot is printed.
 		if(lastStartPos2>lastStartPos && lastStartPos!=-100){
 			int tempStartPos = lastStartPos;
 			int tempEndPos = lastStartPos2;
@@ -317,7 +294,7 @@ void handleIBD1PostIBD2(int &startPos, int &endPos, int &lastStartPos, int &last
 			float tempStartFloat = geneMap[tempStartPos];
 			float tempEndFloat = geneMap[tempEndPos];
 			float segCMLength = tempEndFloat-tempStartFloat;
-			pFile.printf("%s \t %s \t %i \t %i \t %i \t IBD%i \t %f \t %f \t %f \t %i \t %i \t %f\n", names[indiv1].c_str(), names[indiv2].c_str(), chrom, physMap[tempStartPos], physMap[tempEndPos], 1, tempStartFloat, tempEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));
+			pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[indiv1]->getId(), PersonLoopData::_allIndivs[indiv2]->getId(), chrom, physMap[tempStartPos], physMap[tempEndPos], 1, tempStartFloat, tempEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));
 
 
 		}
@@ -334,7 +311,7 @@ void handleIBD1PostIBD2(int &startPos, int &endPos, int &lastStartPos, int &last
 
 	}
 	if(segmentOverlap(startPos,lastStartPos2, endPos, lastEndPos2)){
-
+		//checking if a true IBD1 segment needs to be printed before the current IBD2 segment is placed in the stored segment.
 		if(startPos!=-100 && lastStartPos2>=startPos){
 			int tempStartPos = startPos;
 			int tempEndPos = lastStartPos2;
@@ -347,15 +324,16 @@ void handleIBD1PostIBD2(int &startPos, int &endPos, int &lastStartPos, int &last
 			if(!mergeSegments(tempStartPos, tempEndPos, lastStartPos, lastEndPos, tempStartFloat, tempEndFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, 1, realIBD2, realIBD2New, noMerge)){
 				//Handle possible existing IBD unaffiliated with the IBD2 segment
 				if(lastStartPos !=-100 && ((segCMLengthOld > min_length) && (segMarkerLengthOld > min_markers))){
-					pFile.printf("%s \t %s \t %i \t %i \t %i \t IBD%i \t %f \t %f \t %f \t %i \t %i \t %f\n", names[indiv1].c_str(), names[indiv2].c_str(), chrom, physMap[lastStartPos], physMap[lastEndPos], 1, lastStartFloat, lastEndFloat, segCMLengthOld, segMarkerLengthOld, int(lastErrorCount), lastErrorCount / float(segMarkerLengthOld));
+					pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[indiv1]->getId(), PersonLoopData::_allIndivs[indiv2]->getId(), chrom, physMap[lastStartPos], physMap[lastEndPos], 1, lastStartFloat, lastEndFloat, segCMLengthOld, segMarkerLengthOld, int(lastErrorCount), lastErrorCount / float(segMarkerLengthOld));
 				}
-				if(segCMLength>0){
-					pFile.printf("%s \t %s \t %i \t %i \t %i \t IBD%i \t %f \t %f \t %f \t %i \t %i \t %f\n", names[indiv1].c_str(), names[indiv2].c_str(), chrom, physMap[tempStartPos], physMap[tempEndPos], 1, tempStartFloat, tempEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));
+				if(segCMLength>0){//TODO IBD1 error not tracked properly here!
+					pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[indiv1]->getId(), PersonLoopData::_allIndivs[indiv2]->getId(), chrom, physMap[tempStartPos], physMap[tempEndPos], 1, tempStartFloat, tempEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));
 				}
 			}
 			else{
 				segCMLength = lastEndFloat-lastStartFloat;
-				pFile.printf("%s \t %s \t %i \t %i \t %i \t IBD%i \t %f \t %f \t %f \t %i \t %i \t %f\n", names[indiv1].c_str(), names[indiv2].c_str(), chrom, physMap[lastStartPos], physMap[lastEndPos], 1, lastStartFloat, lastEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));				
+				segMarkerLength = lastEndPos-lastStartPos;
+				pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[indiv1]->getId(), PersonLoopData::_allIndivs[indiv2]->getId(), chrom, physMap[lastStartPos], physMap[lastEndPos], 1, lastStartFloat, lastEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));				
 
 			}
 			lastStartPos=-100;
@@ -368,7 +346,7 @@ void handleIBD1PostIBD2(int &startPos, int &endPos, int &lastStartPos, int &last
 		if(startPos!=-100 && lastEndPos2<=endPos){
 			startPos=lastEndPos2;
 			startFloat = lastEndFloat2;
-			realIBD2New=true;
+			realIBD2New=true;//Track the fact that the ongoing IBD1 segment is now linked to true IBD2 and will need to be printed regardless of length later on.
 		}
 		else{
 			startPos=-100;
@@ -385,54 +363,58 @@ void handleIBD1PostIBD2(int &startPos, int &endPos, int &lastStartPos, int &last
 
 //CHeck for a valid IBD1 segment in either the stored segment or the ongoing one and print them if valid.
 template<class IO_TYPE>
-bool forceEndSegment(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, float min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount, int ibdType, int chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, bool noMerge){
+bool forceEndSegment(int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, float min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount, int ibdType, const char* chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, bool noMerge){
 
 
 
 
 	bool printed = false;
+	//make one last attempt at merging the ongoing segment with the last one.
 	bool merged = mergeSegments(startPos, endPos, lastStartPos, lastEndPos, startFloat, endFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, ibdType, realIBD2, realIBD2New, noMerge);
 	int segMarkerLength = lastEndPos-lastStartPos;
 	float segCMLength = lastEndFloat-lastStartFloat;
+	//check the stored segment, print if valid.
 	if(lastStartPos!=-100 && segMarkerLength>0 && (realIBD2 || ((segCMLength > min_length) && (segMarkerLength > min_markers)))){
-		pFile.printf("%s \t %s \t %i \t %i \t %i \t IBD%i \t %f \t %f \t %f \t %i \t %i \t %f\n", names[indiv1].c_str(), names[indiv2].c_str(), chrom, physMap[lastStartPos], physMap[lastEndPos], ibdType, lastStartFloat, lastEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));
+		pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[indiv1]->getId(), PersonLoopData::_allIndivs[indiv2]->getId(), chrom, physMap[lastStartPos], physMap[lastEndPos], ibdType, lastStartFloat, lastEndFloat, segCMLength, segMarkerLength, int(lastErrorCount), lastErrorCount / float(segMarkerLength));
 		printed=true;
 	}
-	if((!merged) && (startFloat!=-1)){
+	if((!merged) && (startFloat!=-1)){//If there still is an ongoing segment after merging, check nad print it.
 		segMarkerLength = endPos-startPos;
 		segCMLength = endFloat-startFloat;
 		if(segMarkerLength>0 && ((realIBD2New) || ((segCMLength > min_length) && (segMarkerLength > min_markers)))){
-			pFile.printf("%s \t %s \t %i \t %i \t %i \t IBD%i \t %f \t %f \t %f \t %i \t %i \t %f\n", names[indiv1].c_str(), names[indiv2].c_str(), chrom, physMap[startPos], physMap[endPos], ibdType, startFloat, endFloat, segCMLength, segMarkerLength, int(errorCount), errorCount / float(segMarkerLength));
+			pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[indiv1]->getId(), PersonLoopData::_allIndivs[indiv2]->getId(), chrom, physMap[startPos], physMap[endPos], ibdType, startFloat, endFloat, segCMLength, segMarkerLength, int(errorCount), errorCount / float(segMarkerLength));
 			printed=true;
 		}
 	}
 	return printed;
 }
 
-//CHeck for a valid IBD2 segment in either the stored segment or the ongoing one and print them if valid.
+//CHeck for a valid IBD2 segment in either the stored segment or the ongoing one and print them if valid. Has additional processing required between printing the IBD2 segment and the associated IBD1 segments.
 template<class IO_TYPE>
-bool forceEndSegment2(int &startPos2, int &endPos2, int &lastStartPos2, int &lastEndPos2, float &startFloat2, float &endFloat2, float &lastStartFloat2, float &lastEndFloat2, float min_length2, int min_markers2, float &errorCount2, float &lastErrorCount2, int &lastWindowErrorCount2, int chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, int min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount,bool noMerge){
+bool forceEndSegment2(int &startPos2, int &endPos2, int &lastStartPos2, int &lastEndPos2, float &startFloat2, float &endFloat2, float &lastStartFloat2, float &lastEndFloat2, float min_length2, int min_markers2, float &errorCount2, float &lastErrorCount2, int &lastWindowErrorCount2, const char* chrom, uint64_t indiv1, uint64_t indiv2, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, FileOrGZ<IO_TYPE> &pFile, bool &realIBD2, bool &realIBD2New, int &startPos, int &endPos, int &lastStartPos, int &lastEndPos, float &startFloat, float &endFloat, float &lastStartFloat, float &lastEndFloat, float min_length, int min_markers, float &errorCount, float &lastErrorCount, int &lastWindowErrorCount,bool noMerge){
 
 	bool printed = false;
+	 //make one last attempt at merging the ongoing segment with the last one.
 	bool merged = mergeSegments(startPos2, endPos2, lastStartPos2, lastEndPos2, startFloat2, endFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, 2, realIBD2, realIBD2New, noMerge);
 	int segMarkerLength = lastEndPos2-lastStartPos2;
 	float segCMLength = lastEndFloat2-lastStartFloat2;
 	if(lastStartPos2!=-100 && ((segCMLength > min_length2) && (segMarkerLength > min_markers2))){
-		pFile.printf("%s \t %s \t %i \t %i \t %i \t IBD%i \t %f \t %f \t %f \t %i \t %i \t %f\n", names[indiv1].c_str(), names[indiv2].c_str(), chrom, physMap[lastStartPos2], physMap[lastEndPos2], 2, lastStartFloat2, lastEndFloat2, segCMLength, segMarkerLength, int(lastErrorCount2), lastErrorCount2 / float(segMarkerLength));
+		pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[indiv1]->getId(), PersonLoopData::_allIndivs[indiv2]->getId(), chrom, physMap[lastStartPos2], physMap[lastEndPos2], 2, lastStartFloat2, lastEndFloat2, segCMLength, segMarkerLength, int(lastErrorCount2), lastErrorCount2 / float(segMarkerLength));
 		printed=true;
 	}
 
 	if(printed){
+		//Deal with the IBD1 contiguous with the processed IBD2 segment.
 		handleIBD1PostIBD2<IO_TYPE>(startPos, endPos, lastStartPos, lastEndPos, startFloat, endFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, startPos2, endPos2, lastStartPos2, lastEndPos2, startFloat2, endFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
 	}
 
 	printed=false;
 
-	if((!merged) && (startFloat2!=-1)){
+	if((!merged) && (startFloat2!=-1)){//check the stored segment, print if valid
 		segMarkerLength = endPos2-startPos2;
 		segCMLength = endFloat2-startFloat2;
 		if( (segCMLength > min_length2) && (segMarkerLength > min_markers2)){
-			pFile.printf("%s \t %s \t %i \t %i \t %i \t IBD%i \t %f \t %f \t %f \t %i \t %i \t %f\n", names[indiv1].c_str(), names[indiv2].c_str(), chrom, physMap[startPos2], physMap[endPos2], 2, startFloat2, endFloat2, segCMLength, segMarkerLength, int(errorCount2), errorCount2 / float(segMarkerLength));
+			pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[indiv1]->getId(), PersonLoopData::_allIndivs[indiv2]->getId(), chrom, physMap[startPos2], physMap[endPos2], 2, startFloat2, endFloat2, segCMLength, segMarkerLength, int(errorCount2), errorCount2 / float(segMarkerLength));
 			printed=true;
 		}
 
@@ -446,6 +428,7 @@ bool forceEndSegment2(int &startPos2, int &endPos2, int &lastStartPos2, int &las
 			endPos2=-100;
 			startFloat2=-1;
 			errorCount2=0;
+			 //Deal with the IBD1 contiguous with the processed IBD2 segment.
 			handleIBD1PostIBD2<IO_TYPE>(startPos, endPos, lastStartPos, lastEndPos, startFloat, endFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, startPos2, endPos2, lastStartPos2, lastEndPos2, startFloat2, endFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
 		}
 	}
@@ -459,20 +442,35 @@ bool forceEndSegment2(int &startPos2, int &endPos2, int &lastStartPos2, int &las
 
 
 
-//more elaborate after windows are modified
+//Determine the corresponding block of 64 and bit within that block for genotype data.
 void findIndexAndShift(uint64_t marker, uint64_t indiv, uint64_t newMarkerBlocks, uint64_t &newIndex, uint64_t &newShift){
 	newIndex=indiv*(newMarkerBlocks)+(2*(marker/64));//Finds the 64-bit region in the transposed data where the value (first value) fits. Second goes in the next block
-	newShift= marker%64;//Finds how deep into that 64-bit regions the new bits need to be placed.
+	newShift = marker%64;//Finds how deep into that 64-bit regions the new bits need to be placed.
 }
 
+//Determine the corresponding block of 64 and bit within that block for missing genotype data in a difference sized matrix.
+void findIndexAndShiftMiss(uint64_t marker, uint64_t indiv, uint64_t newMarkerBlocks, uint64_t &newIndex, uint64_t &newShift){
+	newIndex=indiv * (newMarkerBlocks / 2) + (marker / 64);
+	newShift = marker % 64;
+}
+
+//Find block corresponding to an individual and set of markers.
 inline uint64_t findIndex(uint64_t markerBlock, uint64_t indiv, uint64_t newMarkerBlocks){
 	return indiv*(2*newMarkerBlocks)+(2*markerBlock);
 }
 
+//Find blockcorresponding to an individual and set of markers in the missing data.
+inline uint64_t findMissIndex(uint64_t markerBlock, uint64_t indiv, uint64_t newMarkerBlocks){
+	return indiv*newMarkerBlocks+markerBlock;
+}
 
+
+
+//populate the IBD boolean and error boolean int with true or false depending on if there is valid IBD1 in the current window and if it had any errors in it.
+//Populate the errorCount value with the number of errors. Necessary for merge, error density analyses, and skipping IBD2 analysis when unneeded. 
 void compareWindowsIBD1(uint64_t hom11, uint64_t hom12, uint64_t hom21, uint64_t hom22, bool &error, int &errorCount, bool &IBD){
-	uint64_t fullCompare = 	(hom11 & hom22) | (hom12 & hom21);
-	if(fullCompare==0){
+	uint64_t fullCompare = 	(hom11 & hom22) | (hom12 & hom21);//The bitwise comparison for iBD1
+	if(fullCompare==0){//If error free, return.
 		IBD=true;
 		error=false;
 		errorCount=0;
@@ -480,14 +478,14 @@ void compareWindowsIBD1(uint64_t hom11, uint64_t hom12, uint64_t hom21, uint64_t
 	}
 
 	fullCompare=fullCompare-lowestSetBit(fullCompare);
-	if(fullCompare==0){
+	if(fullCompare==0){//If one error, return and set errros to true.
 		IBD=true;
 		error=true;
 		errorCount=1;
 		return;
 	}
 
-	if((fullCompare-lowestSetBit(fullCompare))==0){
+	if((fullCompare-lowestSetBit(fullCompare))==0){//If there is more than one error, IBD is false and errors are irrelevant. Error count is
 		IBD=false;//TODO
 		error=false;//TODO
 		errorCount=2;
@@ -499,17 +497,19 @@ void compareWindowsIBD1(uint64_t hom11, uint64_t hom12, uint64_t hom21, uint64_t
 	return;
 }
 
+//populate the IBD boolean and error boolean int with true or false depending on if there is valid IBD1 in the current window and if it had any errors in it.
+//Populate the errorCount value with the number of errors. Necessary for merge and error density analyses.
 void compareWindowsIBD2(uint64_t hom11, uint64_t hom12, uint64_t hom21, uint64_t hom22, uint64_t missing1, uint64_t missing2, bool &error, int &errorCount, bool &IBD){
-	//uint64_t fullCompare = 	(~(missing1 | missing2)) & ((hom11 & ~hom21) | (hom12 & ~hom22));
-	uint64_t fullCompare = (~(missing1 | missing2)) & ((hom11 ^ hom21) | (hom12 ^ hom22));
-	if(fullCompare==0){
+	//uint64_t fullCompare = 	(~(missing1 | missing2)) & ((hom11 & ~hom21) | (hom12 & ~hom22));//Archaic and incorrect
+	uint64_t fullCompare = (~(missing1 | missing2)) & ((hom11 ^ hom21) | (hom12 ^ hom22));//The bitwise comparison for IBD2.
+	if(fullCompare==0){//If no error, return true.
 		IBD=true;
 		error=false;
 		errorCount=0;
 		return;
 	}
 
-	fullCompare = fullCompare - lowestSetBit(fullCompare);
+	fullCompare = fullCompare - lowestSetBit(fullCompare);//If one error, return true
 	if(fullCompare==0){
 		IBD=true;
 		error=true;
@@ -517,7 +517,7 @@ void compareWindowsIBD2(uint64_t hom11, uint64_t hom12, uint64_t hom21, uint64_t
 		return;
 	}
 
-	if((fullCompare-lowestSetBit(fullCompare))==0){
+	if((fullCompare-lowestSetBit(fullCompare))==0){//If two errors, for IBD2 we still return true.
 		IBD=true;//TODO
 		error=true;//TODO
 		errorCount=2;
@@ -529,59 +529,67 @@ void compareWindowsIBD2(uint64_t hom11, uint64_t hom12, uint64_t hom21, uint64_t
 	return;
 }
 
-
-void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t *missingData, uint64_t indBlocks, uint64_t markers, uint64_t bytes, uint64_t individuals, std::vector<int> &starts, std::vector<int> &ends, std::vector<float> &geneMap) {
+//Transpose the input genotypes into a matrix of individuals as rows and blocks of markers as columns to speed up our analyses. Populates transposedData with homozygosity bit sets, and missingData with bit sets of where data is missing.
+void interleaveAndConvertData(uint64_t *transposedData, uint64_t *missingData, uint64_t blocks, uint64_t markers, uint64_t bytes, uint64_t individuals, std::vector<int> &starts, std::vector<int> &ends, std::vector<float> &geneMap) {
 
 	printf("Organizing genotype data for analysis... "); 
 	fflush(stdout);
-	uint64_t blocks = indBlocks;//Unnecessary name change, represents number of 64-wise blocks of individuals in the input.
-	uint64_t dataBlocks = ceil((float)individuals/4);
+	uint64_t dataBlocks = ((individuals+3)/4);//Breakdown of the 8 bit block counts based on the number of individuals in the input. Not the blocks in our own internal data format.
+	//Need to check later if redundant with blocks. These were different quantities before.
 
-	uint64_t newMarkerBlocks = 2*(ceil((float)markers/64));//two for each set of 64 markers.
-	//uint64_t homMask = 3;
+	uint64_t newMarkerBlocks = 2*(ceil((float)markers/64));//two for each set of 64 markers. This is the marker block format we use in our internal data storage.
 	uint64_t mask1 = 1;
 
+	
+	std::fill(transposedData, transposedData + individuals * newMarkerBlocks, 0 );
+	std::fill(missingData, missingData + individuals * (newMarkerBlocks / 2), 0);
 
-
-
-	for (uint64_t b = 0; b < newMarkerBlocks; b++) {
+/*	for (uint64_t b = 0; b < newMarkerBlocks; b++) {
 
 		for (uint64_t i = 0; i < individuals; i++) {
-			transposedData[i*newMarkerBlocks+b]=0;//I believe it must be zero'd at some point. POSSIBLE SUBOPTIMAL
-			//std::cerr<<"zeroing: "<<i*newMarkerBlocks+b<<"\n";	
-			missingData[i*newMarkerBlocks+b]=0;//TODO BAD! SLOW! FUSE TWO LATER A BETTER WAY!
+			transposedData[i*newMarkerBlocks+b]=0;//Preemptively zeroing our matrix so our bit addition does not create problems.
 		}
 	}
 
-	for (uint64_t b = 0; b < blocks; b++) {
-		for (uint64_t m = 0; m < markers; m++) {
-			uint64_t *data64 = (uint64_t *)(data+dataBlocks*m);
 
-			uint8_t *data8 = data+dataBlocks*m;
+	for (uint64_t b = 0; b < newMarkerBlocks/2; b++) {
+		for (uint64_t i = 0; i < individuals; i++) {
+			missingData[i*(newMarkerBlocks/2)+b]=0;//Preemptively zeroing our matrix so our bit addition does not create problems.
+		}
+	}*/
+
+	uint8_t *data = new uint8_t[dataBlocks];
+
+	for (uint64_t m = 0; m < markers; m++) {
+		PersonIO<PersonLoopData>::readGenoRow(data, (int)(dataBlocks));//Reading in one row of the .bed file input to be transposed.
+		uint64_t *data64 = (uint64_t *)data;//Reformat to allow blocks of 64 bits to be extracted and processed at once from an otherwise 8 bit format.
+
+		uint8_t *data8 = data;
+		for (uint64_t b = 0; b < blocks; b++) {
+
 			uint64_t individuals1;
 			uint64_t individuals2;
 			if (b < individuals / 64) {
-				individuals1 = data64[b * 2];
-				individuals2 = data64[b * 2 + 1];
+				individuals1 = data64[b * 2];//First set of 32 2-bit individuals to be combined into two blocks of 64 later.
+				individuals2 = data64[b * 2 + 1];//Second set of 32 2-bit individuals to be combined into two blocks of 64 later. TODO May not be a speedup in new data ordering.
 			}
 			else {
+				//Handle if the first set of individuals does not fill out a set of 64 completely and needs to be supplemented with 0s.
 				if(individuals%64<32){
 					individuals1 = 0;
 					individuals2 = 0;
 					int count = 0;
-					for (uint64_t x = floor((individuals-1) / 4); x>=b*16; x--) {//TODO: confirm if possible breaking point for uk biobank
+					for (uint64_t x = ((individuals-1) / 4); x>=b*16; x--) {
 						individuals1 = individuals1 << 8;
 						individuals1 += data8[x];
-						//printf("x: %i b: %i m: %i index: %i\n",x,b,m,x+dataBlocks*m);
 						count++;
 					}
-					//printf("Complete set of <=8?\n");
 				}
-				else{
+				else{//Handle if the second set of individuals does not fill out a set of 64 completely and needs to be supplemented with 0s.
 					individuals1 = data64[b * 2];
 					individuals2 = 0;
 					int count = 0;
-					for (uint64_t x = floor((individuals-1) / 4); x>=b*16+8; x--) {//TODO: confirm if possible breaking point for uk biobank
+					for (uint64_t x = ((individuals-1) / 4); x>=b*16+8; x--) {
 						individuals2 = individuals2 << 8;
 						individuals2 += data8[x];
 
@@ -594,22 +602,26 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 			uint64_t newShift;
 			uint64_t newIndex;
 
-			//converts 2-bit format to 2 1-bit homozygotes and places single bit value into corresponding point in transposed data.
+			//converts 2-bit format to 2 1-bit homozygotes and places single bit value into corresponding point in transposed data
+			//Leaving this in two pieces for now, as there are differences due to how the two sets of individuals are placed in the final set of 64 index wise. Will combine later..
 			for(uint64_t indivShift=0; indivShift<32; indivShift++){
 				uint64_t indiv = indivShift+(b * 64);
 				if(indiv>=individuals)
 					break;
+				
+
+				//Put the two relevant bits for the current genotype at the end of the set and mask off the rest.
 				uint64_t bit1 = (individuals1 >> (indivShift * 2)) & mask1;
 				uint64_t bit2 = ((individuals1 >> (indivShift * 2+1)) & mask1);
 
 
-
+				//Create homozygous set data.
 				uint64_t hom1 = bit1 & bit2;
-				uint64_t hom2 = ((~bit1) & (~bit2)) & mask1;//POSSIBLE SUBOPTIMAL
-
+				uint64_t hom2 = ((~bit1) & (~bit2)) & mask1;//TODO POSSIBLE SUBOPTIMAL
+				//Create missing set data
 				uint64_t missBits = bit1 & ~bit2 & mask1;
 
-
+				//Find and emplace data in transposed matrix.
 				findIndexAndShift(m, indiv, newMarkerBlocks, newIndex, newShift);
 				uint64_t hom1Shift = hom1<<newShift;
 				transposedData[newIndex]+=hom1Shift;
@@ -617,9 +629,11 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 				uint64_t hom2Shift = hom2<<newShift;
 				transposedData[newIndex+1]+=hom2Shift;
 
+
+
+				findIndexAndShiftMiss(m, indiv, newMarkerBlocks, newIndex, newShift);
 				uint64_t missShift = missBits<<newShift;
 				missingData[newIndex]+=missShift;
-				missingData[newIndex+1]+=missShift;
 
 			}
 			for(uint64_t indivShift=32; indivShift<64; indivShift++){
@@ -642,15 +656,15 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 
 				uint64_t hom2Shift = hom2<<newShift;
 				transposedData[newIndex+1]+=hom2Shift;
-
+				findIndexAndShiftMiss(m, indiv, newMarkerBlocks, newIndex, newShift);
 				uint64_t missShift = missBits<<newShift;
 				missingData[newIndex]+=missShift;
-				missingData[newIndex+1]+=missShift;
 
 			}
 
 		}
 	}
+	delete[] data;
 	printf("done.\n");
 }
 
@@ -658,11 +672,11 @@ void interleaveAndConvertData(uint8_t *data, uint64_t *transposedData, uint64_t 
 
 //Loop over the individuals and windows and perform the segment analysis.
 template<class IO_TYPE>
-void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingData, int numIndivs, int indBlocks, int numMarkers, int markBytes, int markBlocks, std::vector<int> &starts, std::vector<int> &ends, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, std::string filename, std::string extension, bool noMerge, int chrom, int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, int numThreads){	
+void segmentAnalysis(uint64_t *transposedData, uint64_t *missingData, int numIndivs, int indBlocks, int numMarkers, int markBytes, int markBlocks, std::vector<int> &starts, std::vector<int> &ends, std::vector<std::string> &names, std::vector<std::string> &SNPID, std::vector<float> &geneMap, std::vector<int> &physMap, std::string filename, std::string extension, bool noMerge, const char* chrom, int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, int numThreads){	
 
 
 	//Transposes the input matrix and handles the 8->64 bit format conversion..
-	interleaveAndConvertData(data, transposedData, missingData, indBlocks, numMarkers, markBytes, numIndivs, starts, ends, geneMap);
+	interleaveAndConvertData(transposedData, missingData, indBlocks, numMarkers, markBytes, numIndivs, starts, ends, geneMap);
 
 
 	omp_set_dynamic(0);     // Explicitly disable dynamic teams
@@ -676,7 +690,7 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 	{
 		std::string threadname;
 		FileOrGZ<IO_TYPE> pFile;
-		threadname = filename + std::to_string(omp_get_thread_num())+extension;
+		threadname = filename +"."+std::to_string((1+omp_get_thread_num()))+extension;
 		bool success = pFile.open(threadname.c_str(), "w");
 		if(!success){
 			printf("\nERROR: could not open output VCF file %s!\n", threadname.c_str());
@@ -691,8 +705,8 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 		for(uint64_t indiv1=0; indiv1<numIndivs; indiv1++){
 			for(uint64_t indiv2=indiv1+1; indiv2<numIndivs; indiv2++){
 
-				int startPos = 0;//NOTE! THIS ALLOWS ERRORS IN THE VERY FIRST WINDOW! TODO
-				float startFloat = geneMap[startPos];//genetic start position of ongoing segment.
+				int startPos = -100;//NOTE! THIS ALLOWS ERRORS IN THE VERY FIRST WINDOW! TODO
+				float startFloat = -1;//geneMap[startPos];//genetic start position of ongoing segment.
 				float errorCount = 0;//error count of ongoing segment.
 				int lastErrorFree = -100;//position of last error free window. Used to backtrack segment endings to the last error free window.
 				float lastErrorFreeFloat = -1;//genetic position of the last error free window. NOTE: not part of the "last" group of variables referring to the previous stored segment.
@@ -716,8 +730,8 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 
 
 				//IBD2 equivalents of the previously described variables.
-				int startPos2 = 0;//NOTE! THIS ALLOWS ERRORS IN THE VERY FIRST WINDOW! TODO
-				float startFloat2 = geneMap[startPos];
+				int startPos2 = -100;//NOTE! THIS ALLOWS ERRORS IN THE VERY FIRST WINDOW! TODO
+				float startFloat2 = -1;//geneMap[startPos];
 				float errorCount2 = 0;
 				int lastErrorFree2 = -100;
 				float lastErrorFreeFloat2 = -1;
@@ -751,7 +765,8 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 					//Locations of the two windows for comparison in the binary data.
 					uint64_t index1 = findIndex(markerBlock, indiv1, markBlocks);
 					uint64_t index2 = findIndex(markerBlock, indiv2, markBlocks);
-
+					uint64_t missIndex1 = findMissIndex(markerBlock,indiv1,markBlocks);
+					uint64_t missIndex2 = findMissIndex(markerBlock,indiv2,markBlocks);
 
 
 					//Finds the two homozygous sets for each individual.
@@ -766,7 +781,7 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 
 					//Don't bother checking IBD2 if there are too many errors in IBD1.
 					if(ibd2 && windowErrorCount<3){
-						compareWindowsIBD2(tDataI1_1, tDataI1_2, tDataI2_1, tDataI2_2, missingData[index1], missingData[index2], hasError2, windowErrorCount2, isIBD2);
+						compareWindowsIBD2(tDataI1_1, tDataI1_2, tDataI2_1, tDataI2_2, missingData[missIndex1], missingData[missIndex2], hasError2, windowErrorCount2, isIBD2);
 					}
 					else{
 						isIBD2=false;
@@ -781,7 +796,7 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 							int endPos2 = ends[markerBlock];//Set the endpos if the current window is the end of a segment.
 
 							if(hasError2 && startPos2 != -100){
-								errorCount2++;
+								errorCount2+=windowErrorCount2;
 								//Error rate in ongoing segment check.
 								if((errorCount2 / (endPos2 - startPos2)) > errorThreshold2){
 									//Terminate ongoing IBD2 segment. Tracks if a segment was actually produced with validMerge.
@@ -830,8 +845,10 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 										handleIBD1PostIBD2(startPos, lastErrorFree, lastStartPos, lastEndPos, startFloat, lastErrorFreeFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, startPos2, lastErrorFree2, lastStartPos2, lastEndPos2, startFloat2, lastErrorFreeFloat2, lastStartFloat2, lastEndFloat2, min_length2, min_markers2, errorCount2, lastErrorCount2, lastWindowErrorCount2, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
 									}
 								}
-								endSegment(startPos, lastErrorFree, lastStartPos, lastEndPos, startFloat, lastErrorFreeFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, 1, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
-								lastWindowErrorCount = windowErrorCount;
+								if(startPos!=-100 && endPos!=-100){
+									endSegment(startPos, lastErrorFree, lastStartPos, lastEndPos, startFloat, lastErrorFreeFloat, lastStartFloat, lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, 1, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
+									lastWindowErrorCount = windowErrorCount;
+								}
 							}
 
 						}
@@ -848,7 +865,7 @@ void segmentAnalysis(uint8_t *data, uint64_t *transposedData, uint64_t *missingD
 					}
 					else if(startPos!=-100){
 						endSegment(startPos, lastErrorFree, lastStartPos, lastEndPos, startFloat, lastErrorFreeFloat, lastStartFloat,lastEndFloat, min_length, min_markers, errorCount, lastErrorCount, lastWindowErrorCount, 1, chrom, indiv1, indiv2, names, SNPID, geneMap, physMap, pFile, realIBD2, realIBD2New, noMerge);
-						lastWindowErrorCount = windowErrorCount;
+						lastWindowErrorCount = windowErrorCount;//TODO choose if this should be placed inside endSegment to reduce redundant code.
 					}
 				}
 				//Handle the end of chromosomes, as there is no end of IBD or error density increase to trigger these segments to print otherwise.
@@ -907,11 +924,9 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	uint8_t **dataPointer;
 	const char* VERSION_NUMBER = "1.05";
 	const char* RELEASE_DATE = "November 10, 2019";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
-	int *bytesPerMarker; 
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
 	std::vector<std::string> names;
@@ -1024,11 +1039,11 @@ int main(int argc, char **argv) {
 	}
 	if(bFileNamesGiven)
 	{
-		PersonIO<PersonBulk>::readData(bfileNameBed, bfileNameBim, bfileNameFam, /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ 1, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ true);
+		PersonIO<PersonLoopData>::readData(bfileNameBed, bfileNameBim, bfileNameFam, /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ 1, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true);
 	}
 	else{
 		printf("No -b or -bfile - Running with input files: %s, %s, %s\n",argv[1], argv[2], argv[3]);
-		PersonIO<PersonBulk>::readData(argv[1], argv[2], argv[3], /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ 1, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ true);
+		PersonIO<PersonLoopData>::readData(argv[1], argv[2], argv[3], /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ 1, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true);
 	}
 	if(numThreads==0){
 		numThreads = 1;
@@ -1036,13 +1051,13 @@ int main(int argc, char **argv) {
 
 
 
-	PersonBulk::getBulkContainers(dataPointer, bytesPerMarker);
-	numIndivs = PersonBulk::_allIndivs.length();
+	//PersonLoopData::getBulkContainers(dataPointer, bytesPerMarker);
+	numIndivs = PersonLoopData::_allIndivs.length();
 
 	//Name change here for error thresholds.
 	float errorThreshold = errorDensityThreshold; 
 	float errorThreshold2 = errorDensityThreshold2;
-	uint8_t *data = *dataPointer;
+	//uint8_t *data = *dataPointer;
 
 
 
@@ -1052,11 +1067,7 @@ int main(int argc, char **argv) {
 	uint64_t markBlocks = ceil((float)(numMarkers) / 64);
 
 
-	for (uint64_t x = 0; x < numIndivs; x++) {
-		names.push_back(PersonBulk::_allIndivs[x]->getId());
-	}
 	for(uint64_t x = 0; x < numMarkers; x++){
-		SNPID.push_back(Marker::getMarker(x)->getName());
 		geneMap.push_back(Marker::getMarker(x)->getMapPos());
 		physMap.push_back(Marker::getMarker(x)->getPhysPos());
 		chrom = Marker::getMarker(x)->getChromName();
@@ -1067,8 +1078,8 @@ int main(int argc, char **argv) {
 	//Convert to cM if the input genetic map seems to be too short.
 	if(!distForce){
 		float len = geneMap.back() - geneMap.front();
-		if(len < 49.0){
-			printf("Chromosome map shorter than 49 units of genetic distance.\n Morgan input detected - Converting to centimorgans.\n");
+		if(len < 6.0){
+			printf("Chromosome map shorter than 6 units of genetic distance.\n Morgan input detected - Converting to centimorgans. (Prevent this by running with -force argument)\n");
 			for(uint64_t x = 0; x< geneMap.size(); x++){
 				geneMap[x]=geneMap[x]*100.0;
 			}
@@ -1077,7 +1088,7 @@ int main(int argc, char **argv) {
 	}
 
 	uint64_t *transposedData = new uint64_t[2 * numIndivs*markBlocks];
-	uint64_t *missingData = new uint64_t[2 * numIndivs*markBlocks];//TODO THIS IS SILLY!
+	uint64_t *missingData = new uint64_t[numIndivs*markBlocks];//TODO THIS IS SILLY!
 
 
 
@@ -1096,14 +1107,14 @@ int main(int argc, char **argv) {
 
 	printf("done.\n");
 
-	int chromVal = atoi(chrom);
+	
 	if(gzip){
 		extension = ".seg.gz";
-		segmentAnalysis<gzFile>(data, transposedData, missingData, numIndivs, indBlocks, numMarkers, markBytes, markBlocks, starts, ends, names, SNPID, geneMap, physMap, filename, extension, noMerge, chromVal, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, numThreads);	
+		segmentAnalysis<gzFile>(transposedData, missingData, numIndivs, indBlocks, numMarkers, markBytes, markBlocks, starts, ends, names, SNPID, geneMap, physMap, filename, extension, noMerge, chrom, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, numThreads);	
 	}
 	else{
 		extension = ".seg";
-		segmentAnalysis<FILE *>(data, transposedData, missingData, numIndivs, indBlocks, numMarkers, markBytes, markBlocks, starts, ends, names, SNPID, geneMap, physMap, filename, extension, noMerge, chromVal, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, numThreads);	
+		segmentAnalysis<FILE *>(transposedData, missingData, numIndivs, indBlocks, numMarkers, markBytes, markBlocks, starts, ends, names, SNPID, geneMap, physMap, filename, extension, noMerge, chrom, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, numThreads);	
 	}
 
 
