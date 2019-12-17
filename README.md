@@ -22,8 +22,6 @@ IBIS requires PLINK .bed, .bim, and .fam format data to run. PLINK can be run wi
 
 ### IBIS Usage
 
-IBIS is designed to process one chromosome at a time. This single chromosome can be specified with the -chr option, or alternatively input files can be provided with only one chromosome.
-
 IBIS accepts its input .bed, .bim, and .fam files in one of two ways:
 
 * First Three Arguments: [bed file] [bim file] [fam file]         
@@ -44,24 +42,32 @@ IBIS options:
 
 * -chr \<value\>
 	* Specify a single chromosome for IBIS to process when given an input file with multiple chromosomes.
-	* IBIS will fail if this is not specified and there are multiple chromosomes in the input files.
 * -mL or -min_l \<value\>            
 	* Specify minimum length for acceptible segments to output.
 	* Defaults to 7 centimorgans.
+* -mL2 or -min_l2 \<value\>
+	* Specify minimum length for acceptible IBD2 segments to output.
+	* Defaults to 2 centimorgans.
 * -er or -errorRate \<value\>        
 	* specify acceptible error rate in a segment before considering it false.                           
 	* Defaults to .004 errors per marker
+* -er2 or -errorRate2 \<value\>
+	*specify acceptible error rate in an IBD2 segment before considering it false.
 * -f or file \<filename\>           
-	* Specify output file.
-	* Defaults to ibis\<thread number\>.seg and will output a separate output file for each thread.
+	* Specify output file prefix.
+	* Defaults to ibis, resulting in ibis.seg.\<thread number\> and ibis.coef.\<thread number\> and will output a separate output file for each thread.
 * -2 or -ibd2                     
 	* enable ibd2 analyses
 * -mt \<value\>                     
 	* Specify a minimum number of markers required for a segment to be printed.
+* -mt2 \<value\> 
+	* Specify a minimum number of markers required for an IBD2 segment to be printed.
 * -threads \<value\>                
 	* set the number of threads available to IBIS for parallel processing.
 * -gzip
-	* Have the progrem output gzipped segment files.
+	* Have the progrem output gzipped segment and coef files.
+* -c \<value\>
+	* Set a minimum kinship coefficient. Pairs with lower kinship will not be printed to the output.
 ## License
 
 This project is licensed under the GPL-3.0 - see the [LICENSE](LICENSE) file for details
