@@ -75,7 +75,7 @@ Ibis produces 2 files for each thread: a .seg file and a .coef file.
 
 Thread file format:
 ```
-sample1 sample2 chrom phys_start_pos phys_end_pos IBD_type gen_start_pos gen_end_pos seg_length marker_count error_count error_density\n
+sample1 sample2 chrom phys_start_pos phys_end_pos IBD_type gen_start_pos gen_end_pos seg_length marker_count error_count error_density
 ```
 * IBD_type can be either IBD1 or IBD2
 * error_count and error_density are negative numbers for IBD1 segments that are being printed due to preceeding printed IBD2 segments, and the error information in them is not available to IBIS.
