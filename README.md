@@ -38,7 +38,7 @@ or
 ```
 ./ibis -bfile test1-chr1 -min_l 7 -mt 500 -er .004 -f test1Out
 ```
-IBIS options:
+### IBIS Options:
 
 * -chr \<value\>
 	* Specify a single chromosome for IBIS to process when given an input file with multiple chromosomes.
@@ -68,6 +68,27 @@ IBIS options:
 	* Have the progrem output gzipped segment and coef files.
 * -c \<value\>
 	* Set a minimum kinship coefficient. Pairs with lower kinship will not be printed to the output.
+
+### IBIS Output
+
+Ibis produces 2 files for each thread: a .seg file and a .coef file.
+
+Thread file format:
+```
+sample1 sample2 chrom phys_start_pos phys_end_pos IBD_type gen_start_pos gen_end_pos seg_length marker_count error_count error_density\n
+```
+* IBD_type can be either IBD1 or IBD2
+* error_count and error_density are negative numbers for IBD1 segments that are being printed due to preceeding printed IBD2 segments, and the error information in them is not available to IBIS.
+
+
+Coef file format:
+```
+sample1 sample2 kinship_coefficient IBD2_fraction segment_Count degree_of_relationship
+```
+* Unrelated individuals have a given degree of -1 
+
+
+
 ## License
 
 This project is licensed under the GPL-3.0 - see the [LICENSE](LICENSE) file for details
