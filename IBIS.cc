@@ -17,7 +17,7 @@
 #include <unordered_set>
 #include <vector>
 #include <cmath>
-//#include <omp.h>
+#include <omp.h>
 #include <sys/time.h>
 #include <time.h>
 #include <zlib.h>
@@ -1049,8 +1049,8 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 	//Transposes the input matrix and handles the 8->64 bit format conversion..
 	interleaveAndConvertData(transposedData, indBlocks, markerWindows, numMarkers, numIndivs, starts, ends,  chromWindowStarts);
 
-	//omp_set_dynamic(0);     // Explicitly disable dynamic teams
-	//omp_set_num_threads(numThreads); //Forces input specified thread number with default 1. 
+	omp_set_dynamic(0);     // Explicitly disable dynamic teams
+	omp_set_num_threads(numThreads); //Forces input specified thread number with default 1. 
 
 	printf("Beginning segment detection with %i thread(s)...",numThreads);
 	fflush(stdout);
@@ -1086,13 +1086,12 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 	  }
 	  }*/
 
-//#pragma omp parallel
-if(true)
+#pragma omp parallel
 	{
 		std::string threadname;
 		FileOrGZ<IO_TYPE> pFile;
 		FileOrGZ<IO_TYPE> classFile;
-		threadname = filename +"."+std::to_string((1+0))+".seg"+extension;
+		threadname = filename +"."+std::to_string((1+omp_get_thread_num()))+".seg"+extension;
 		bool success = pFile.open(threadname.c_str(), "w");
 		if(!success){
 			printf("\nERROR: could not open output VCF file %s!\n", threadname.c_str());
@@ -1101,7 +1100,7 @@ if(true)
 		}
 		if(printCoef){
 			std::string classFilename;
-			classFilename = filename +".coef."+std::to_string((1+0))+extension;
+			classFilename = filename +".coef."+std::to_string((1+omp_get_thread_num()))+extension;
 			success = classFile.open(classFilename.c_str(), "w");
 			if(!success){
 				printf("\nERROR: could not open output VCF file %s!\n", classFilename.c_str());
@@ -1114,7 +1113,7 @@ if(true)
 		}
 
 		std::vector<SegmentData> storedSegs;
-//#pragma omp for schedule(dynamic, 10)
+#pragma omp for schedule(dynamic, 10)
 		for(uint64_t indiv1=0; indiv1<numIndivs; indiv1++){
 			for(uint64_t indiv2=indiv1+1; indiv2<numIndivs; indiv2++){
 				//FileOrGZ<IO_TYPE> pFile = pFileArray[0];
@@ -1547,17 +1546,17 @@ int main(int argc, char **argv) {
 
 	printf("done.\n");
 
-	//if(numThreads>1){
-	//	if(gzip){
-	//		extension = ".gz";
-	//		segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor);	
-	//	}
-	//	else{
-	//		extension = "";
-	//		segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor);	
-	//	}
-	//}
-	//else{
+	if(numThreads>1){
+		if(gzip){
+			extension = ".gz";
+			segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor);	
+		}
+		else{
+			extension = "";
+			segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor);	
+		}
+	}
+	else{
 
 		if(gzip){
 			extension = ".gz";
@@ -1568,5 +1567,5 @@ int main(int argc, char **argv) {
 			segmentAnalysisMonoThread<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor);
 		}
 
-	//}
+	}
 }
