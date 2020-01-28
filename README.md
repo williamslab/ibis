@@ -66,8 +66,15 @@ or
 	* set the number of threads available to IBIS for parallel processing.
 * -gzip
 	* Have the progrem output gzipped segment and coef files.
+* -printCoef
+	* Have the progrem print the .coef files. 
 * -c \<value\>
 	* Set a minimum kinship coefficient. Pairs with lower kinship will not be printed to the output.
+* -d \<value\>
+	* Set a minimum degree of relatedness. Pairs with more distant degrees will not be printed to the output.
+* -a \<value\>
+	* Set a different supplemental coefficient factor to add to pairs.
+	* Defaults to 0.00138
 
 ### IBIS Output
 
@@ -86,7 +93,8 @@ Coef file format:
 sample1 sample2 kinship_coefficient IBD2_fraction segment_Count degree_of_relationship
 ```
 * Unrelated individuals have a given degree of -1 
-
+* The supplemental coefficient factor is included in the given kinship coefficients and degrees.
+* When -2 is not used, and IBD1 and IBD2 are not distinguished from each other, the threshold used for degree classification is based on IBD0 fraction, and the supplemental coefficient factor is added to the IBD0 fraction by multiplying it by 4 to convert it into genome fraction units.
 
 
 ## License
