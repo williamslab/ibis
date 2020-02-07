@@ -551,7 +551,7 @@ void interleaveAndConvertData(HomozygAndMiss transposedData[], int64_t indBlocks
 //Loop over the individuals and windows and perform the segment analysis.
 //Used only for monothreaded case to avoid overhead of OMP.
 template<class IO_TYPE>
-void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor){	
+void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor, int index1Start, int index1End){	
 
 
 
@@ -591,7 +591,7 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 	}
 	if(printCoef){
 		std::string classFilename;
-		classFilename = filename +".coef."+extension;
+		classFilename = filename +".coef"+extension;
 		success = classFile.open(classFilename.c_str(), "w");
 		if(!success){
 			printf("\nERROR: could not open output VCF file %s!\n", classFilename.c_str());
@@ -602,9 +602,10 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 
 		classFile.printf("Individual1\tIndividual2\tKinship_Coefficient\tIBD2_Fraction\tSegment_Count\tDegree\n");
 	}
-
+	if(index1End==0)
+		index1End=numIndivs;
 	std::vector<SegmentData> storedSegs;
-	for(uint64_t indiv1=0; indiv1<numIndivs; indiv1++){
+	for(uint64_t indiv1=index1Start; indiv1<index1End; indiv1++){
 		for(uint64_t indiv2=indiv1+1; indiv2<numIndivs; indiv2++){
 			float totalIBD1Length = 0;
 			float totalIBD2Length = 0;
@@ -749,7 +750,7 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 					}
 					if(classVal==8)
 						classVal=-1;
-					classFile.printf("%s %s %f %f %i %i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
+					classFile.printf("%s\t%s\t%f\t%f\t%i\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
 				}
 				for (SegmentData seg: storedSegs){
 					seg.printSegment(pFile,indiv1,indiv2);
@@ -767,7 +768,7 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 //Loop over the individuals and windows and perform the segment analysis.
 //Includes OMP multithreading
 template<class IO_TYPE>
-void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor){	
+void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor,int index1Start,int index1End){	
 
 	omp_lock_t lock;//Lock for the coefficient/relationship class file
 	omp_init_lock(&lock);
@@ -811,7 +812,7 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 		}
 		if(printCoef){
 			std::string classFilename;
-			classFilename = filename +".coef."+std::to_string((1+omp_get_thread_num()))+extension;
+			classFilename = filename +".coef"+extension;
 			success = classFile.open(classFilename.c_str(), "w");
 			if(!success){
 				printf("\nERROR: could not open output VCF file %s!\n", classFilename.c_str());
@@ -822,14 +823,15 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 
 			classFile.printf("Individual1\tIndividual2\tKinship_Coefficient\tIBD2_Fraction\tSegment_Count\tDegree\n");
 		}
-
+	if(index1End==0)
+		index1End = numIndivs;
 
 #pragma omp parallel
 	{
 		
 		std::vector<SegmentData> storedSegs;
 #pragma omp for schedule(dynamic, 60)
-		for(uint64_t indiv1 = 0; indiv1<numIndivs; indiv1++){
+		for(uint64_t indiv1 = index1Start; indiv1<index1End; indiv1++){
 			for(uint64_t indiv2 = indiv1+1; indiv2<numIndivs; indiv2++){
 				float totalIBD1Length = 0;
 				float totalIBD2Length = 0;
@@ -975,7 +977,7 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 						}
 						if(classVal==8)
 							classVal=-1;//notation for unrelated
-						classFile.printf("%s %s %f %f %i %i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
+						classFile.printf("%s\t%s\t%f\t%f\t%i\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
 					}
 					for (SegmentData seg: storedSegs){
 						seg.printSegment(pFile,indiv1,indiv2);
@@ -1008,41 +1010,50 @@ void printUsageAndExit(){
 	printf(" -mL or -min_l <value>\n");
 	printf("      Specify minimum length for acceptible segments to output.\n");
 	printf("      Defaults to 7 centimorgans.\n\n");
+	printf(" -mL2 or -min_l2 <value>\n");
+        printf("      Specify minimum length for acceptible segments to output.\n");
+        printf("      Defaults to 2 centimorgans.\n\n");
 	printf(" -er or -errorRate <value>\n");
 	printf("      Specify acceptible error rate in a segment before considering it false.\n");
 	printf("      Defaults to .004 errors per marker.\n\n");
-	printf(" -f or file <filename>\n");
-	printf("      Specify output file.\n\n");
-	printf("      Defaults to ibis<thread number>.seg and will output a separate output file for each thread.\n");
+	printf(" -er2 or -errorRate2 <value>\n");
+        printf("      Specify acceptible error rate in a segment before considering it false.\n");
+        printf("      Defaults to .008 errors per marker.\n\n");
+	printf(" -f or -file <filename>\n");
+	printf("      Specify output file.\n");
+	printf("      Defaults to ibis.seg\n\n");
 	printf(" -2 or -ibd2\n");
 	printf("      Enable ibd2 analyses.\n\n");
 	printf(" -mt <value>\n");
 	printf("      Set minimum number of markers required for acceptible segments to output.\n");
-	printf("      Defaults to 500 markers\n\n");
+	printf("      Defaults to 512 markers\n\n");
+	printf(" -mt2 <value>\n");
+        printf("      Set minimum number of markers required for acceptible segments to output.\n");
+        printf("      Defaults to 192 markers\n\n");
+	printf(" -chr <value>\n");
+        printf("      Set specific single chromosome to analyse in an input with multiple chromosomes\n");
+        printf("      Defaults to processing all chromosomes in the input\n\n");
 	printf(" -threads <value>\n");
 	printf("      Set the number of threads available to IBIS for parallel processing.\n");
 	printf("      Defaults to 1\n\n");
 	printf(" -gzip\n");
 	printf("      Have the program output gzipped segment files\n\n");
-	printf(" -force\n");
-	printf("      Prevent the program from trying to convert the input genetic map into centiMorgans\n");
-	printf("      Program otherwise multiplies input map by 100 if the input map's total length is less than 6.0 units of genetic distance\n\n");
+	printf(" -noConvert\n");
+	printf("      Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100\n");
+	printf("      IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables\n\n");
 	printf(" -printCoef\n");
         printf("      Have IBIS print .coef files in addition to segment files.\n\n");
 	printf(" -c <value>\n");
-	printf("      Set a minimum kinship coefficient for IBIS to print, omitting pairs of lower relatedness from the output.");
+	printf("      Set a minimum kinship coefficient for IBIS to print, omitting pairs of lower relatedness from the output.\n");
 	printf("      Defaults to 0.\n\n");
-	printf(" -d <value>\n");
-        printf("      Set a minimum degree of relatedness for IBIS to print, omitting pairs of lower relatedness from the output.");
+	printf(" -d or -degree <value>\n");
+        printf("      Set a minimum degree of relatedness for IBIS to print, omitting pairs of lower relatedness from the output.\n");
         printf("      Defaults to including all degrees.\n\n");
 	printf(" -a <value>\n");
-        printf("      Set a supplemental factor for IBIS to add to kinship coefficients and use for degree classification.");
+        printf("      Set a supplemental factor for IBIS to add to kinship coefficients and use for degree classification.\n");
         printf("      Defaults to 0.00138.\n\n");
-	printf("OUTPUT FORMAT:\n\n");
-	printf(" -Segment file\n");
-	printf("sample1 sample2 chrom phys_start_pos phys_end_pos IBD_type gen_start_pos gen_end_pos seg_length marker_count debug_data debug_data\n\n");
-	printf(" -Coef file\n");
-	printf("sample1 sample2 kinship_coefficient IBD2_fraction segment_count degree_of_relationship\n\n");
+	printf(" -noFamID\n");
+        printf("      Have the program omit family IDs from the output, including only individual IDs.\n\n");
 	exit(1);
 
 
@@ -1050,8 +1061,8 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.17";
-	const char* RELEASE_DATE = "January 27, 2020";
+	const char* VERSION_NUMBER = "1.17.1";
+	const char* RELEASE_DATE = "January 29, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
@@ -1072,7 +1083,8 @@ int main(int argc, char **argv) {
 	std::string filename, extension;//For building the output file.
 	char bfileNameBed[100],bfileNameBim[100],bfileNameFam[100];//locations for input filenames.
 	float fudgeFactor = 0.00138;
-
+	int index1Start = 0;
+	int index1End = 0;
 	printf("Viewing arguments...\n");
 	fflush(stdout);
 	if(argc == 1){
@@ -1115,7 +1127,7 @@ int main(int argc, char **argv) {
 			std::string fileTemp(argv[i+1]);
 			filename = fileTemp;
 			noPrefixGiven = false;
-			printf("%s - setting output file %s<thread number>.seg\n",arg.c_str(), filename.c_str());
+			printf("%s - setting output file %s.seg\n",arg.c_str(), filename.c_str());
 
 		}
 		else if(arg=="-mt"){
@@ -1138,7 +1150,7 @@ int main(int argc, char **argv) {
 			gzip = true;
 			printf("%s - running with gzip enabled\n",arg.c_str());
 		}
-		else if(arg=="-force"){
+		else if(arg=="-noConvert"){
 			distForce=true;
 			printf("%s - forcing morgan format input and output\n",arg.c_str());
 		}
@@ -1163,6 +1175,12 @@ int main(int argc, char **argv) {
 		else if(arg=="-degree" || arg=="-d"){
 			min_coef = (1.0/(pow(2.0,(atoi(argv[i+1])+1.5))));
 			printf("%s - creating min kinship coefficient threshold from degree %s as %f\n", arg.c_str(),argv[i+1],min_coef);
+		}
+		else if(arg=="-setIndex1End"){
+			index1End = atoi(argv[i+1]);
+		}
+		else if(arg=="-setIndex1Start"){
+			index1Start = atoi(argv[i+1]);
 		}
 		else if(arg.at(0)=='-'){
 			printUsageAndExit();
@@ -1226,7 +1244,7 @@ int main(int argc, char **argv) {
 		for(int chr = 0; chr< Marker::getNumChroms(); chr++){
 
 			if(6.0 > Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos()){
-				printf("Chromosome map shorter than 6 units of genetic distance.\n Morgan input detected - Converting to centimorgans. (Prevent this by running with -force argument)\n");
+				printf("Chromosome map shorter than 6 units of genetic distance.\n Morgan input detected - Converting to centimorgans. (Prevent this by running with -noConvert argument)\n");
 				Marker::convertMapTocM();
 				break;
 			}
@@ -1265,22 +1283,22 @@ int main(int argc, char **argv) {
 	if(numThreads>1){
 		if(gzip){
 			extension = ".gz";
-			segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor);	
+			segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End);	
 		}
 		else{
 			extension = "";
-			segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor);	
+			segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End);	
 		}
 	}
 	else{
 
 		if(gzip){
 			extension = ".gz";
-			segmentAnalysisMonoThread<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor);
+			segmentAnalysisMonoThread<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End);
 		}
 		else{
 			extension = "";
-			segmentAnalysisMonoThread<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor);
+			segmentAnalysisMonoThread<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End);
 		}
 
 	}

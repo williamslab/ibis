@@ -75,7 +75,12 @@ or
 * -a \<value\>
 	* Set a different supplemental coefficient factor to add to pairs.
 	* Defaults to 0.00138
-
+* -noFamID
+	* Have IBIS use only the individual ID in its output notations.
+	* Defaults to \<fam ID\>:\<indiv ID\>
+* -force
+	* Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100
+	* IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -force disables
 ### IBIS Output
 
 Ibis produces 2 files for each thread: a .seg file and a .coef file.
