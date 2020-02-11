@@ -1121,6 +1121,11 @@ void printUsageAndExit(){
 	printf("      Defaults to 0.00138.\n\n");
 	printf(" -noFamID\n");
 	printf("      Have the program omit family IDs from the output, including only individual IDs.\n\n");
+	printf(" -bin\n");
+        printf("      Have the program print the .seg file in binary format. Requires tool to interpret.\n\n");
+	printf(" -maxDif <value>\n");
+	printf("      Set a maximum separation distance between SNPs in the input map.\n");
+	printf("      Defaults to 0.12 of the same units in the bim file map.\n\n"); 
 	exit(1);
 
 
@@ -1155,6 +1160,7 @@ int main(int argc, char **argv) {
 	printf("Viewing arguments...\n");
 	fflush(stdout);
 	bool binary = false;
+	float maxDif = 0.12;
 	if(argc == 1){
 		printUsageAndExit();		
 	}
@@ -1254,6 +1260,10 @@ int main(int argc, char **argv) {
 		else if(arg=="-setIndex1Start"){
 			index1Start = atoi(argv[i+1]);
 		}
+		else if(arg=="-maxDif"){
+			printf("%s - altering maximum SNP separation value to %s\n", arg.c_str(),argv[i+1]);
+			maxDif = atof(argv[i+1]);
+		}
 		else if(arg.at(0)=='-'){
 			printUsageAndExit();
 		}
@@ -1335,7 +1345,7 @@ int main(int argc, char **argv) {
 		
 		if(Marker::getMarker(altmark-1)->getChromIdx()==Marker::getMarker(altmark)->getChromIdx()){
 			float diff = Marker::getMarker(altmark)->getMapPos()-Marker::getMarker(altmark-1)->getMapPos();
-			float mv1 = altMap->back()+0.1;
+			float mv1 = altMap->back()+maxDif;
 			float mv2 = altMap->back()+diff;	
 			if(mv1>mv2)
 				altMap->push_back(mv2);
