@@ -33,6 +33,7 @@ class FileOrGZ {
 		bool open(const char *filename, const char *mode);
 		int getline();
 		int printf(const char *format, ...);
+		size_t pfwrite(const void *ptr, size_t size, size_t n);
 		int close();
 
 		static const int INIT_SIZE = 1024 * 50;
@@ -186,6 +187,17 @@ int FileOrGZ<gzFile>::printf(const char *format, ...) {
 }
 
 template<>
+size_t FileOrGZ<FILE *>::pfwrite(const void *ptr, size_t size, size_t n) {
+	return fwrite(ptr, size, n, fp);
+
+}
+template<>
+size_t FileOrGZ<gzFile>::pfwrite(const void *ptr, size_t size, size_t n) {                                                                                                                                                                      printf("GZip and Binary not currently supported together");
+	exit(1);
+	return 0;
+}
+
+template<>
 int FileOrGZ<FILE *>::close() {
 	assert(buf_len == 0);
 	// should free buf, but I know the program is about to end, so won't
@@ -251,7 +263,8 @@ class SegmentData{
 		int trackedErrorIBD1; //For use in IBD2 segments to correctly calculate the errors in the following IBD1 segment when terminated.
 		int ibdType; // Either 1 or 2 depending on nature of IBD for the segment.
 		bool realIBD2; // Marks IBD1 segments that were contiguous with a stored real IBD2 segment.
-		const char* chrom;
+		int chrom; //index of chrom name in the input .bim file.
+		std::vector<float> * altMap;
 		SegmentData(){
 			startPos = -1;
 			startFloat = -1;//genetic start position of ongoing segment.
@@ -265,7 +278,7 @@ class SegmentData{
 		}
 
 		template<class IO_TYPE>	
-			void printSegment(FileOrGZ<IO_TYPE> &pFile, int ind1, int ind2);
+			void printSegment(FileOrGZ<IO_TYPE> &pFile, int ind1, int ind2, bool binary);
 
 		float cMLength();
 		int markerLength();
@@ -282,13 +295,34 @@ class SegmentData{
 
 
 inline float SegmentData::cMLength(){return endFloat-startFloat;}
-inline int SegmentData::markerLength(){return endPos-startPos;}
+inline int SegmentData::markerLength(){return endPos-startPos+1;}
 
 
 template<class IO_TYPE>
-void SegmentData::printSegment(FileOrGZ<IO_TYPE> &pFile, int ind1, int ind2){
+void SegmentData::printSegment(FileOrGZ<IO_TYPE> &pFile, int ind1, int ind2, bool binary){
+	if(binary){
+		int length = markerLength();
+		int erC = int(errorCount);
+		int startPhys = Marker::getMarker(startPos)->getPhysPos();
+		int endPhys = Marker::getMarker(endPos)->getPhysPos();
 
-	pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[ind1]->getId(),PersonLoopData::_allIndivs[ind2]->getId(),chrom, Marker::getMarker(startPos)->getPhysPos(), Marker::getMarker(endPos)->getPhysPos(),ibdType, startFloat, endFloat, cMLength(), markerLength(), int(errorCount), float(errorCount) / float(endPos - startPos));
+		int buffer1[] = {ind1, ind2, chrom, startPhys, endPhys, ibdType, length, erC};
+		float buffer2[] = {startFloat, endFloat};
+		pFile.pfwrite(buffer1,sizeof(int),8);
+		pFile.pfwrite(buffer2,sizeof(float), 2);
+		//pFile.pfwrite(&ind1,sizeof(ind1),1);
+		//pFile.pfwrite(&ind2,sizeof(ind2),1);
+		//pFile.pfwrite(&chrom,sizeof(chrom),1);
+		//pFile.pfwrite(&(startPhys),sizeof(startPhys),1);
+		//pFile.pfwrite(&(endPhys),sizeof(endPhys),1);
+		//pFile.pfwrite(&ibdType, sizeof(ibdType),1);
+		//pFile.pfwrite(&startFloat, sizeof(startFloat),1);
+		//pFile.pfwrite(&endFloat, sizeof(endFloat),1);
+		//pFile.pfwrite(&length, sizeof(length),1);
+		//pFile.pfwrite(&erC, sizeof(erC), 1);
+	}
+	else
+		pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[ind1]->getId(),PersonLoopData::_allIndivs[ind2]->getId(),Marker::getChromName(chrom), Marker::getMarker(startPos)->getPhysPos(), Marker::getMarker(endPos)->getPhysPos(),ibdType, startFloat, endFloat, cMLength(), markerLength(), int(errorCount), float(errorCount) / float(endPos - startPos));
 
 }
 
@@ -321,7 +355,8 @@ void SegmentData::updateSegmentStartpoints(int newStartPos){
 }
 //Confirms if segment meets relevant conditions to be a valid segment.
 inline bool SegmentData::checkSegment(float min_length, int marker_length){
-	return ((endPos > startPos) && (startPos >= 0) && (realIBD2 || (((endPos - startPos) > marker_length) && ((endFloat - startFloat) > min_length))));
+	return ((endPos > startPos) && (startPos >= 0) && (realIBD2 || (((endPos - startPos) > marker_length) && ((altMap->at(endPos) - altMap->at(startPos)) > min_length))));
+	//return ((endPos > startPos) && (startPos >= 0) && (realIBD2 || (((endPos - startPos) > marker_length) && ((endFloat - startFloat) > min_length))));
 }
 //Invalid segments are reprsented by a startPos of -1.
 inline bool SegmentData::hasStart(){
@@ -551,7 +586,7 @@ void interleaveAndConvertData(HomozygAndMiss transposedData[], int64_t indBlocks
 //Loop over the individuals and windows and perform the segment analysis.
 //Used only for monothreaded case to avoid overhead of OMP.
 template<class IO_TYPE>
-void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor, int index1Start, int index1End){	
+void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor, int index1Start, int index1End, bool binary, std::vector<float> * altMap){	
 
 
 
@@ -582,8 +617,22 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 	std::string threadname;
 	FileOrGZ<IO_TYPE> pFile;
 	FileOrGZ<IO_TYPE> classFile;
+	std::string binExt;
+
+
 	threadname = filename +".seg"+extension;
-	bool success = pFile.open(threadname.c_str(), "w");
+	std::string fileArgs;
+	bool success;
+	if(binary)
+		binExt="b";
+	else
+		binExt="";
+
+	threadname = filename +"."+binExt+"seg"+extension;
+	if(binary)
+		success = pFile.open(threadname.c_str(), "wb");
+	else
+		success = pFile.open(threadname.c_str(), "w");
 	if(!success){
 		printf("\nERROR: could not open output VCF file %s!\n", threadname.c_str());
 		perror("open");
@@ -613,7 +662,8 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 			SegmentData currentIBD1Segment;// = new SegmentData;
 			SegmentData currentIBD2Segment;// = new SegmentData;
 			currentIBD1Segment.ibdType = 1;
-
+			currentIBD1Segment.altMap = altMap;
+                        currentIBD2Segment.altMap = altMap;
 
 			//IBD2 equivalents of the previously described variables.
 			currentIBD2Segment.ibdType = 2;
@@ -623,8 +673,8 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 
 
 			for(int chr = 0; chr < Marker::getNumChroms(); chr++){
-				currentIBD1Segment.chrom = Marker::getChromName(chr);
-				currentIBD2Segment.chrom = Marker::getChromName(chr);
+				currentIBD1Segment.chrom = chr;
+				currentIBD2Segment.chrom = chr;
 				for(uint64_t markerWindow=chromWindowBoundaries[chr][0]; markerWindow<=chromWindowBoundaries[chr][1]; markerWindow++){
 					//Booleans for the status of the IBD conclusions for the current window comparison.
 					bool isIBD1;
@@ -753,7 +803,7 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 					classFile.printf("%s\t%s\t%f\t%f\t%i\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
 				}
 				for (SegmentData seg: storedSegs){
-					seg.printSegment(pFile,indiv1,indiv2);
+					seg.printSegment(pFile,indiv1,indiv2, binary);
 				}
 			}
 			storedSegs.clear();
@@ -768,7 +818,7 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 //Loop over the individuals and windows and perform the segment analysis.
 //Includes OMP multithreading
 template<class IO_TYPE>
-void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor,int index1Start,int index1End){	
+void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor,int index1Start,int index1End, bool binary,std::vector<float> *altMap){	
 
 	omp_lock_t lock;//Lock for the coefficient/relationship class file
 	omp_init_lock(&lock);
@@ -795,40 +845,56 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 
 	omp_set_dynamic(0);     // Explicitly disable dynamic teams
 	omp_set_num_threads(numThreads); //Forces input specified thread number with default 1. 
-
+	std::string fileArgs;
+	if(binary)
+		fileArgs = "wb";
+	else
+		fileArgs = "w";
 	printf("Beginning segment detection with %i thread(s)...",numThreads);
 	fflush(stdout);
 
-			
-		std::string threadname;
-		FileOrGZ<IO_TYPE> pFile;
-		FileOrGZ<IO_TYPE> classFile;
-		threadname = filename +".seg"+extension;
-		bool success = pFile.open(threadname.c_str(), "w");
+
+	std::string threadname;
+	FileOrGZ<IO_TYPE> pFile;
+	FileOrGZ<IO_TYPE> classFile;
+
+	std::string binExt;
+
+	bool success;                                                                                                                                                                                                        if(binary)
+		binExt="b";                                                                                                                                                                                                  else
+		binExt="";                                                                                                                                                                                           
+	threadname = filename +"."+binExt+"seg"+extension;                                                                                                                                                                   if(binary)
+		success = pFile.open(threadname.c_str(), "wb");
+	else
+		success = pFile.open(threadname.c_str(), "w"); 
+
+
+
+
+	if(!success){
+		printf("\nERROR: could not open output VCF file %s!\n", threadname.c_str());
+		perror("open");
+		exit(1);
+	}
+	if(printCoef){
+		std::string classFilename;
+		classFilename = filename +".coef"+extension;
+		success = classFile.open(classFilename.c_str(), "w");
 		if(!success){
-			printf("\nERROR: could not open output VCF file %s!\n", threadname.c_str());
+			printf("\nERROR: could not open output VCF file %s!\n", classFilename.c_str());
 			perror("open");
 			exit(1);
 		}
-		if(printCoef){
-			std::string classFilename;
-			classFilename = filename +".coef"+extension;
-			success = classFile.open(classFilename.c_str(), "w");
-			if(!success){
-				printf("\nERROR: could not open output VCF file %s!\n", classFilename.c_str());
-				perror("open");
-				exit(1);
-			}
 
 
-			classFile.printf("Individual1\tIndividual2\tKinship_Coefficient\tIBD2_Fraction\tSegment_Count\tDegree\n");
-		}
+		classFile.printf("Individual1\tIndividual2\tKinship_Coefficient\tIBD2_Fraction\tSegment_Count\tDegree\n");
+	}
 	if(index1End==0)
 		index1End = numIndivs;
 
 #pragma omp parallel
 	{
-		
+
 		std::vector<SegmentData> storedSegs;
 #pragma omp for schedule(dynamic, 60)
 		for(uint64_t indiv1 = index1Start; indiv1<index1End; indiv1++){
@@ -839,7 +905,8 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 				SegmentData currentIBD1Segment;// = new SegmentData;
 				SegmentData currentIBD2Segment;// = new SegmentData;
 				currentIBD1Segment.ibdType = 1;
-
+				currentIBD1Segment.altMap = altMap;
+				currentIBD2Segment.altMap = altMap;
 
 				//IBD2 equivalents of the previously described variables.
 				currentIBD2Segment.ibdType = 2;
@@ -849,8 +916,8 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 
 
 				for(int chr = 0; chr < Marker::getNumChroms(); chr++){
-					currentIBD1Segment.chrom = Marker::getChromName(chr);
-					currentIBD2Segment.chrom = Marker::getChromName(chr);
+					currentIBD1Segment.chrom = chr;
+					currentIBD2Segment.chrom = chr;
 					for(uint64_t markerWindow=chromWindowBoundaries[chr][0]; markerWindow<=chromWindowBoundaries[chr][1]; markerWindow++){
 						//Booleans for the status of the IBD conclusions for the current window comparison.
 						bool isIBD1;
@@ -980,7 +1047,7 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 						classFile.printf("%s\t%s\t%f\t%f\t%i\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
 					}
 					for (SegmentData seg: storedSegs){
-						seg.printSegment(pFile,indiv1,indiv2);
+						seg.printSegment(pFile,indiv1,indiv2,binary);
 					}
 					omp_unset_lock(&lock);
 				}
@@ -1011,14 +1078,14 @@ void printUsageAndExit(){
 	printf("      Specify minimum length for acceptible segments to output.\n");
 	printf("      Defaults to 7 centimorgans.\n\n");
 	printf(" -mL2 or -min_l2 <value>\n");
-        printf("      Specify minimum length for acceptible segments to output.\n");
-        printf("      Defaults to 2 centimorgans.\n\n");
+	printf("      Specify minimum length for acceptible segments to output.\n");
+	printf("      Defaults to 2 centimorgans.\n\n");
 	printf(" -er or -errorRate <value>\n");
 	printf("      Specify acceptible error rate in a segment before considering it false.\n");
 	printf("      Defaults to .004 errors per marker.\n\n");
 	printf(" -er2 or -errorRate2 <value>\n");
-        printf("      Specify acceptible error rate in a segment before considering it false.\n");
-        printf("      Defaults to .008 errors per marker.\n\n");
+	printf("      Specify acceptible error rate in a segment before considering it false.\n");
+	printf("      Defaults to .008 errors per marker.\n\n");
 	printf(" -f or -file <filename>\n");
 	printf("      Specify output file.\n");
 	printf("      Defaults to ibis.seg\n\n");
@@ -1028,11 +1095,11 @@ void printUsageAndExit(){
 	printf("      Set minimum number of markers required for acceptible segments to output.\n");
 	printf("      Defaults to 512 markers\n\n");
 	printf(" -mt2 <value>\n");
-        printf("      Set minimum number of markers required for acceptible segments to output.\n");
-        printf("      Defaults to 192 markers\n\n");
+	printf("      Set minimum number of markers required for acceptible segments to output.\n");
+	printf("      Defaults to 192 markers\n\n");
 	printf(" -chr <value>\n");
-        printf("      Set specific single chromosome to analyse in an input with multiple chromosomes\n");
-        printf("      Defaults to processing all chromosomes in the input\n\n");
+	printf("      Set specific single chromosome to analyse in an input with multiple chromosomes\n");
+	printf("      Defaults to processing all chromosomes in the input\n\n");
 	printf(" -threads <value>\n");
 	printf("      Set the number of threads available to IBIS for parallel processing.\n");
 	printf("      Defaults to 1\n\n");
@@ -1042,18 +1109,18 @@ void printUsageAndExit(){
 	printf("      Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100\n");
 	printf("      IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables\n\n");
 	printf(" -printCoef\n");
-        printf("      Have IBIS print .coef files in addition to segment files.\n\n");
+	printf("      Have IBIS print .coef files in addition to segment files.\n\n");
 	printf(" -c <value>\n");
 	printf("      Set a minimum kinship coefficient for IBIS to print, omitting pairs of lower relatedness from the output.\n");
 	printf("      Defaults to 0.\n\n");
 	printf(" -d or -degree <value>\n");
-        printf("      Set a minimum degree of relatedness for IBIS to print, omitting pairs of lower relatedness from the output.\n");
-        printf("      Defaults to including all degrees.\n\n");
+	printf("      Set a minimum degree of relatedness for IBIS to print, omitting pairs of lower relatedness from the output.\n");
+	printf("      Defaults to including all degrees.\n\n");
 	printf(" -a <value>\n");
-        printf("      Set a supplemental factor for IBIS to add to kinship coefficients and use for degree classification.\n");
-        printf("      Defaults to 0.00138.\n\n");
+	printf("      Set a supplemental factor for IBIS to add to kinship coefficients and use for degree classification.\n");
+	printf("      Defaults to 0.00138.\n\n");
 	printf(" -noFamID\n");
-        printf("      Have the program omit family IDs from the output, including only individual IDs.\n\n");
+	printf("      Have the program omit family IDs from the output, including only individual IDs.\n\n");
 	exit(1);
 
 
@@ -1061,8 +1128,8 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.17.1";
-	const char* RELEASE_DATE = "January 29, 2020";
+	const char* VERSION_NUMBER = "1.18";
+	const char* RELEASE_DATE = "February 20, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
@@ -1087,6 +1154,7 @@ int main(int argc, char **argv) {
 	int index1End = 0;
 	printf("Viewing arguments...\n");
 	fflush(stdout);
+	bool binary = false;
 	if(argc == 1){
 		printUsageAndExit();		
 	}
@@ -1164,14 +1232,18 @@ int main(int argc, char **argv) {
 		else if(arg=="-a"){
 			fudgeFactor = atoi(argv[i+1]);
 		}
+		else if(arg=="-bin"||arg=="-binary"){
+			printf("%s - setting binary output.\n",arg.c_str());
+			binary=true;
+		}
 		else if(arg=="-printCoef"){
 			printCoef = true;
 			printf("%s - printing coefficient file\n", arg.c_str());
 		}
 		else if(arg=="-noFamID"){
-                        noFams=1;
-                        printf("%s - assuming no Family ID in input\n", arg.c_str());
-                }
+			noFams=1;
+			printf("%s - assuming no Family ID in input\n", arg.c_str());
+		}
 		else if(arg=="-degree" || arg=="-d"){
 			min_coef = (1.0/(pow(2.0,(atoi(argv[i+1])+1.5))));
 			printf("%s - creating min kinship coefficient threshold from degree %s as %f\n", arg.c_str(),argv[i+1],min_coef);
@@ -1194,13 +1266,13 @@ int main(int argc, char **argv) {
 		filename = fileTemp;
 	}
 	if(bFileNamesGiven)
-        {
-                PersonIO<PersonLoopData>::readData(bfileNameBed, bfileNameBim, bfileNameFam, /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true);
-        }
-        else{
-                printf("No -b or -bfile - Running with input files: %s, %s, %s\n",argv[1], argv[2], argv[3]);
-                PersonIO<PersonLoopData>::readData(argv[1], argv[2], argv[3], /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true);
-        }
+	{
+		PersonIO<PersonLoopData>::readData(bfileNameBed, bfileNameBim, bfileNameFam, /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true);
+	}
+	else{
+		printf("No -b or -bfile - Running with input files: %s, %s, %s\n",argv[1], argv[2], argv[3]);
+		PersonIO<PersonLoopData>::readData(argv[1], argv[2], argv[3], /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true);
+	}
 	if(numThreads==0){
 		numThreads = 1;
 	}
@@ -1222,8 +1294,8 @@ int main(int argc, char **argv) {
 	uint64_t chromBoundaries[Marker::getNumChroms()][2];//Marker indices in the input for the starts and ends of the given chromosomes.
 	uint64_t chromWindowBoundaries[Marker::getNumChroms()][2];//Window indices in the stored data for the starts and ends of the given chromosomes.
 	uint64_t chromWindowStarts[Marker::getNumChroms()];//Total number of 64-marker blocks that comprise all chromosomes before the indexed chromosome in the stored data. Used to find positions of bits in the data.
-
-
+	std::vector<float> *altMap = new std::vector<float>;
+	
 	for (int chrIndex = 0; chrIndex < Marker::getNumChroms(); chrIndex++) {
 		chromBoundaries[chrIndex][0]=Marker::getFirstMarkerNum(chrIndex);
 		chromBoundaries[chrIndex][1]=Marker::getLastMarkerNum(chrIndex);
@@ -1255,8 +1327,25 @@ int main(int argc, char **argv) {
 	float totalGeneticLength = 0.0;//Value to use as whole input genetic length for calculating coefficients.
 	for(int chr = 0; chr < Marker::getNumChroms(); chr++)
 		totalGeneticLength += Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos();
+	
 
-
+	altMap->push_back(Marker::getMarker(0)->getMapPos());
+	//Set up alternative map for max distance control.
+	for(int altmark = 1; altmark < Marker::getNumMarkers(); altmark++){
+		
+		if(Marker::getMarker(altmark-1)->getChromIdx()==Marker::getMarker(altmark)->getChromIdx()){
+			float diff = Marker::getMarker(altmark)->getMapPos()-Marker::getMarker(altmark-1)->getMapPos();
+			float mv1 = altMap->back()+0.1;
+			float mv2 = altMap->back()+diff;	
+			if(mv1>mv2)
+				altMap->push_back(mv2);
+			else
+				altMap->push_back(mv1);
+			
+		}
+		else
+			altMap->push_back(Marker::getMarker(altmark)->getMapPos());
+	}
 
 	HomozygAndMiss *transposedData = new HomozygAndMiss[numIndivs*markerWindows];//Represents the genotypes in the format to be used by IBIS.
 
@@ -1276,29 +1365,29 @@ int main(int argc, char **argv) {
 		}
 		chromWindowBoundaries[chr][1]=ends.size()-1;
 	}
-
+	
 
 	printf("done.\n");
 	//Monothreaded to avoid potential overhead. Bad style but a runtime gain.
 	if(numThreads>1){
 		if(gzip){
 			extension = ".gz";
-			segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End);	
+			segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary,altMap);	
 		}
 		else{
 			extension = "";
-			segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End);	
+			segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary,altMap);	
 		}
 	}
 	else{
 
 		if(gzip){
 			extension = ".gz";
-			segmentAnalysisMonoThread<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End);
+			segmentAnalysisMonoThread<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary,altMap);
 		}
 		else{
 			extension = "";
-			segmentAnalysisMonoThread<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End);
+			segmentAnalysisMonoThread<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary,altMap);
 		}
 
 	}
