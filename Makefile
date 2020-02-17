@@ -1,28 +1,21 @@
-#CPPSRCS = TransposeBSQUID_parallel.cc
-#CPPSRCS = TransposeBSQUID_no_leniency_2.cc
-
-
 CPPSRCS = IBIS.cc
 
 CSRCS= 
 OBJS= $(patsubst %.cc,%.o,$(CPPSRCS)) $(patsubst %.c,%.o,$(CSRCS))
 
-#EXEC = IBISv0.99_no_leniency_2
-#EXEC = IBISv0.99_parallel_3
 
 EXEC = ibis
-#EXEC = IBISv1.01
-
 
 GPP = g++
 GCC = gcc
 DEFINES= 
-CFLAGS = -Wall $(DEFINES) -fopenmp
+CFLAGS = -Wall $(DEFINES) -fopenmp -mpopcnt
+# -march=native
 CPPFLAGS = -std=c++11 $(CFLAGS)
 ifdef DEBUG           # to use run `make DEBUG=1`
   CFLAGS += -g
 else
-  CFLAGS += -O2
+  CFLAGS += -O3
 endif
 
 # profiling:
@@ -40,7 +33,8 @@ all: $(EXEC)
 
 $(EXEC): $(OBJS) $(HEADERS)
 	$(GPP) -o $(EXEC) $(OBJS) $(CFLAGS) $(LIBS)
-
+bseg2seg: bseg2seg.cc
+	$(GPP) -o $@ $^ $(CFLAGS)
 # This way of building dependencies (per-file) described at
 # http://make.paulandlesley.org/autodep.html
 
