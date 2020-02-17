@@ -29,7 +29,7 @@ LIBS= -lgenetio -lz
 DEPDIR = .deps
 df = $(DEPDIR)/$(*F)
 
-all: $(EXEC)
+all: $(EXEC) bseg2seg
 
 $(EXEC): $(OBJS) $(HEADERS)
 	$(GPP) -o $(EXEC) $(OBJS) $(CFLAGS) $(LIBS)
@@ -65,7 +65,7 @@ tags: $(SRCS) *.h
 	ctags --language-force=c++ --extra=+q --fields=+i --excmd=n *.cc *.h
 
 clean:
-	rm -f $(EXEC) $(OBJS)
+	rm -f $(EXEC) $(OBJS) bseg2seg
 
 clean-deps:
 	rm -f $(DEPDIR)/*.P
