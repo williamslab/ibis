@@ -1171,7 +1171,7 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.19.2";
+	const char* VERSION_NUMBER = "1.19.1";
 	const char* RELEASE_DATE = "February 20, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
