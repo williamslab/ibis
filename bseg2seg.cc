@@ -10,11 +10,9 @@ using namespace std;
 
 void printUsage(char **argv);
 void readFam(vector<char *> &indexToId, char *famFile, bool noFamId);
-void prematureEnd();
 
 struct Segment {
-  int ind1;
-  int ind2;
+  int inds[2];
   uint16_t chromIdx;
   int startPhys;
   int endPhys;
@@ -98,45 +96,40 @@ int main(int argc, char **argv) {
     }
 
     Segment seg;
-    while (fread(&seg.ind1, sizeof(int), 1, in) != 0) {
-      ret = fread(&seg.ind2, sizeof(int), 1, in);
-      if (ret != 1)
-	prematureEnd();
+    while (fread(&seg.inds[0], sizeof(int), 1, in) != 0) {
+      size_t allRet = fread(&seg.inds[1], sizeof(int), 1, in);
 
       ret = fread(&seg.chromIdx, sizeof(uint16_t), 1, in);
-      if (ret != 1)
-	prematureEnd();
+      allRet = allRet && ret;
 
       ret = fread(&seg.startPhys, sizeof(int), 1, in);
-      if (ret != 1)
-	prematureEnd();
+      allRet = allRet && ret;
 
       ret = fread(&seg.endPhys, sizeof(int), 1, in);
-      if (ret != 1)
-	prematureEnd();
+      allRet = allRet && ret;
 
       ret = fread(&seg.ibdType, sizeof(uint8_t), 1, in);
-      if (ret != 1)
-	prematureEnd();
+      allRet = allRet && ret;
 
       ret = fread(&seg.startGenet, sizeof(float), 1, in);
-      if (ret != 1)
-	prematureEnd();
+      allRet = allRet && ret;
 
       ret = fread(&seg.endGenet, sizeof(float), 1, in);
-      if (ret != 1)
-	prematureEnd();
+      allRet = allRet && ret;
 
       ret = fread(&seg.numMarkers, sizeof(int), 1, in);
-      if (ret != 1)
-	prematureEnd();
+      allRet = allRet && ret;
 
       ret = fread(&seg.errorCount, sizeof(int), 1, in);
-      if (ret != 1)
-	prematureEnd();
+      allRet = allRet && ret;
+
+      if (allRet != 1) {
+	fprintf(stderr, "ERROR: unable to read entry in middle of bseg file: was ibis interrupted?\n");
+	exit(5);
+      }
 
       printf("%s\t%s\t%s\t%d\t%d\tIBD%d\t%f\t%f\t%f\t%d\t%d\t%f\n",
-	     indexToId[ seg.ind1 ], indexToId[ seg.ind2 ],
+	     indexToId[ seg.inds[0] ], indexToId[ seg.inds[1] ],
 	     chroms[ seg.chromIdx ], seg.startPhys, seg.endPhys, seg.ibdType,
 	     seg.startGenet, seg.endGenet, (seg.endGenet - seg.startGenet),
 	     seg.numMarkers, seg.errorCount, (float) seg.errorCount / seg.numMarkers);
@@ -212,9 +205,4 @@ void readFam(vector<char *> &indexToId, char *famFile, bool noFamId) {
   fclose(in);
 
   free(buffer);
-}
-
-void prematureEnd() {
-  fprintf(stderr, "ERROR: unable to read entry in middle of bseg file: was ibis interrupted?\n");
-  exit(5);
 }

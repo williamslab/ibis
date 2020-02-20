@@ -595,7 +595,7 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 
 	float totalGeneticLength = 0.0;//Value to use as whole input genetic length for calculating coefficients.
 	for(int chr = 0; chr < Marker::getNumChroms(); chr++)
-		totalGeneticLength += Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos();
+		totalGeneticLength += (Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos() - Marker::getMarker( Marker::getFirstMarkerNum( chr ) )->getMapPos());
 	float ibd1Thresholds[9];//Thresholds for class calling
 	float ibd2Thresholds[9];
 	ibd1Thresholds[0]=0;
@@ -846,7 +846,7 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 
 	float totalGeneticLength = 0.0;//Value to use as whole input genetic length for calculating coefficients.
 	for(int chr = 0; chr < Marker::getNumChroms(); chr++)
-		totalGeneticLength += Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos();
+		totalGeneticLength += (Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos() - Marker::getMarker( Marker::getFirstMarkerNum( chr ) )->getMapPos());
 	float ibd1Thresholds[9];//Thresholds for class calling
 	float ibd2Thresholds[9];
 	ibd1Thresholds[0]=0;
@@ -1171,8 +1171,8 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.19";
-	const char* RELEASE_DATE = "February 17, 2020";
+	const char* VERSION_NUMBER = "1.19.2";
+	const char* RELEASE_DATE = "February 20, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
@@ -1375,11 +1375,6 @@ int main(int argc, char **argv) {
 
 		}
 	}
-
-	float totalGeneticLength = 0.0;//Value to use as whole input genetic length for calculating coefficients.
-	for(int chr = 0; chr < Marker::getNumChroms(); chr++)
-		totalGeneticLength += (Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos() - Marker::getMarker( Marker::getFirstMarkerNum( chr ) )->getMapPos());
-
 
 	altMap->push_back(Marker::getMarker(0)->getMapPos());
 	//Set up alternative map for max distance control.
