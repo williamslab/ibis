@@ -1172,7 +1172,7 @@ void printUsageAndExit(){
 int main(int argc, char **argv) {
 
 	const char* VERSION_NUMBER = "1.19";
-	const char* RELEASE_DATE = "February 14, 2020";
+	const char* RELEASE_DATE = "February 17, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
