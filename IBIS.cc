@@ -1140,33 +1140,36 @@ void printUsageAndExit(){
 	printf("  -chr <value>\n");
 	printf("      Set specific single chromosome to analyse in an input with multiple chromosomes\n");
 	printf("      Defaults to processing all chromosomes in the input\n");
-	printf("  -threads <value> or -t <value>\n");
+	printf("  -t <value> or -threads <value>\n");
 	printf("      Set the number of threads available to IBIS for parallel processing.\n");
 	printf("      Defaults to 1\n");
 	printf("  -noConvert\n");
 	printf("      Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100\n");
 	printf("      IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables\n\n");
 	printf(" Output controls\n");
-	printf("  -f or -file <filename>\n");
+	printf("  -f <filename> or -o <filename> or -file <filename>\n");
 	printf("      Specify output file.\n");
 	printf("      Defaults to ibis.seg\n");
+	printf("  -bin or -binary\n");
+	printf("      Have the program print the .seg file in binary format. Requires tool to interpret.\n");
 	printf("  -gzip\n");
 	printf("      Have the program output gzipped segment files\n");
+	printf("  -noFamID\n");
+	printf("      Have the program omit family IDs from the output, including only individual IDs.\n\n");
+	printf("Kinship coefficient file options\n");
 	printf("  -printCoef\n");
 	printf("      Have IBIS print .coef files in addition to segment files.\n");
-	printf("  -c <value>\n");
-	printf("      Set a minimum kinship coefficient for IBIS to print, omitting pairs of lower relatedness from the output.\n");
-	printf("      Defaults to 0.\n");
-	printf("  -d or -degree <value>\n");
-	printf("      Set a minimum degree of relatedness for IBIS to print, omitting pairs of lower relatedness from the output.\n");
-	printf("      Defaults to including all degrees.\n");
 	printf("  -a <value>\n");
 	printf("      Set a supplemental factor for IBIS to add to kinship coefficients and use for degree classification.\n");
 	printf("      Defaults to 0.00138.\n");
-	printf("  -noFamID\n");
-	printf("      Have the program omit family IDs from the output, including only individual IDs.\n");
-	printf("  -bin or -binary\n");
-	printf("      Have the program print the .seg file in binary format. Requires tool to interpret.\n\n");
+	printf("  -d or -degree <value>\n");
+	printf("      Set a minimum degree of relatedness for IBIS to print, omitting pairs of lower relatedness from the output.\n");
+	printf("      Defaults to including all degrees.\n");
+	printf("      Mutually exclusive with -c\n");
+	printf("  -c <value>\n");
+	printf("      Set a minimum kinship coefficient for IBIS to print, omitting pairs of lower relatedness from the output.\n");
+	printf("      Defaults to 0.\n");
+	printf("      Mutually exclusive with -d\n");
 	exit(1);
 
 
@@ -1193,6 +1196,7 @@ int main(int argc, char **argv) {
 	int numThreads;//Input threadnumber.
 	numThreads=0;
 	bool noFams = 0;
+	bool modifiedCoef = false;//Check if -c or -d argument was already used in the input.
 	std::string filename, extension;//For building the output file.
 	char bfileNameBed[100],bfileNameBim[100],bfileNameFam[100];//locations for input filenames.
 	float fudgeFactor = 0.00138;
@@ -1238,7 +1242,7 @@ int main(int argc, char **argv) {
 			printf("%s - running with error rate %f\n",arg.c_str(), errorDensityThreshold2);
 
 		}
-		else if( arg =="-f" || arg == "-file"){
+		else if( arg =="-f" || arg == "-file" || arg == "-o"){
 			std::string fileTemp(argv[i+1]);
 			filename = fileTemp;
 			noPrefixGiven = false;
@@ -1269,11 +1273,16 @@ int main(int argc, char **argv) {
 			distForce=true;
 			printf("%s - forcing morgan format input and output\n",arg.c_str());
 		}
-		else if(arg=="-threads" || "-t"){
+		else if(arg=="-threads" || arg== "-t"){
 			numThreads=atoi(argv[i+1]);
 			printf("%s - running with %i threads\n",arg.c_str(), numThreads);
 		}
 		else if(arg=="-c"){
+			if(modifiedCoef){
+				printf("Cannot use both -c and -d, or use either more than once\n");
+				exit(1);
+			}
+			modifiedCoef=true;
 			min_coef = atof(argv[i+1]);
 		}
 		else if(arg=="-a"){
@@ -1292,6 +1301,11 @@ int main(int argc, char **argv) {
 			printf("%s - assuming no Family ID in input\n", arg.c_str());
 		}
 		else if(arg=="-degree" || arg=="-d"){
+			if(modifiedCoef){
+                                printf("Cannot use both -c and -d, or use either more than once\n");
+                                exit(1);
+                        }
+                        modifiedCoef=true;
 			min_coef = (1.0/(pow(2.0,(atoi(argv[i+1])+1.5))));
 			printf("%s - creating min kinship coefficient threshold from degree %s as %f\n", arg.c_str(),argv[i+1],min_coef);
 		}

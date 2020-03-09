@@ -70,31 +70,35 @@ or
 	* enable ibd2 analyses
 * -chr \<value\>
 	* Specify a single chromosome for IBIS to process when given an input file with multiple chromosomes.
-* -threads \<value\> or -t \<value\>                
+* -t \<value\> or -threads \<value\>                
 	* set the number of threads available to IBIS for parallel processing.
 * -noConvert
 	* Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100
 	* IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables
 ### Output controls:
-* -f or file \<filename\>           
+* -f \<filename\> or -o \<filename\> or -file \<filename\>         
 	* Specify output file prefix.
 	* Defaults to ibis, resulting in ibis.seg.\<thread number\> and ibis.coef.\<thread number\> and will output a separate output file for each thread.
+* -bin or -binary
+	* Have the program print the .seg file in binary format. Requires bseg2seg.cc to interpret.
 * -gzip
 	* Have the progrem output gzipped segment and coef files.
-* -printCoef
-	* Have the progrem print the .coef files. 
-* -c \<value\>
-	* Set a minimum kinship coefficient. Pairs with lower kinship will not be printed to the output.
-* -d \<value\>
-	* Set a minimum degree of relatedness. Pairs with more distant degrees will not be printed to the output.
-* -a \<value\>
-	* Set a different supplemental coefficient factor to add to pairs.
-	* Defaults to 0.00138
 * -noFamID
 	* Have IBIS use only the individual ID in its output notations.
 	* Defaults to \<fam ID\>:\<indiv ID\>
-* -bin or -binary
-	* Have the program print the .seg file in binary format. Requires bseg2seg.cc to interpret.
+### Kinship coefficient file options:
+* -printCoef
+	* Have the progrem print the .coef files. 
+* -a \<value\>
+	* Set a different supplemental coefficient factor to add to pairs.
+	* Defaults to 0.00138
+* -d \<value\>
+	* Set a minimum degree of relatedness. Pairs with more distant degrees will not be printed to the output.
+	* Mutually exclusive with -c
+* -c \<value\>
+	* Set a minimum kinship coefficient. Pairs with lower kinship will not be printed to the output.
+	* Mutually exclusive with -d
+
 ### IBIS Output
 
 Ibis produces 2 files for each thread: a .seg file and a .coef file.
