@@ -9,6 +9,12 @@ Download the Makefile and the included IBIS.cc file, and run:
 ```
 make
 ```
+
+For the bseg2seg converter, run
+```
+make bseg2seg
+```
+
 in the same directory. You will need the genetio library from:
 https://github.com/williamslab/genetio
 
@@ -16,6 +22,7 @@ https://github.com/williamslab/genetio
 Include the genetio.a file's location in your LD_LIBRARY_PATH environment variable.
 
 IBIS also requires zlib and OpenMP.
+
 ### Supported input formats
 
 IBIS requires PLINK .bed, .bim, and .fam format data to run. PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
@@ -39,9 +46,7 @@ or
 ./ibis -bfile test1-chr1 -min_l 7 -mt 500 -er .004 -f test1Out
 ```
 ### IBIS Options:
-
-* -chr \<value\>
-	* Specify a single chromosome for IBIS to process when given an input file with multiple chromosomes.
+### Threshold parameters:
 * -mL or -min_l \<value\>            
 	* Specify minimum length for acceptible segments to output.
 	* Defaults to 7 centimorgans.
@@ -53,17 +58,27 @@ or
 	* Defaults to .004 errors per marker
 * -er2 or -errorRate2 \<value\>
 	*specify acceptible error rate in an IBD2 segment before considering it false.
-* -f or file \<filename\>           
-	* Specify output file prefix.
-	* Defaults to ibis, resulting in ibis.seg.\<thread number\> and ibis.coef.\<thread number\> and will output a separate output file for each thread.
-* -2 or -ibd2                     
-	* enable ibd2 analyses
 * -mt \<value\>                     
 	* Specify a minimum number of markers required for a segment to be printed.
 * -mt2 \<value\> 
 	* Specify a minimum number of markers required for an IBD2 segment to be printed.
-* -threads \<value\>                
+* -maxDist \<value\>
+	* Set a maximum separation distance between SNPs in the input map.
+	* Defaults to being inactive.
+### Execution options:
+* -2 or -ibd2                     
+	* enable ibd2 analyses
+* -chr \<value\>
+	* Specify a single chromosome for IBIS to process when given an input file with multiple chromosomes.
+* -threads \<value\> or -t \<value\>                
 	* set the number of threads available to IBIS for parallel processing.
+* -noConvert
+	* Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100
+	* IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -force disables
+### Output controls:
+* -f or file \<filename\>           
+	* Specify output file prefix.
+	* Defaults to ibis, resulting in ibis.seg.\<thread number\> and ibis.coef.\<thread number\> and will output a separate output file for each thread.
 * -gzip
 	* Have the progrem output gzipped segment and coef files.
 * -printCoef
@@ -78,9 +93,8 @@ or
 * -noFamID
 	* Have IBIS use only the individual ID in its output notations.
 	* Defaults to \<fam ID\>:\<indiv ID\>
-* -force
-	* Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100
-	* IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -force disables
+* -bin or -binary
+	* Have the program print the .seg file in binary format. Requires bseg2seg.cc to interpret.
 ### IBIS Output
 
 Ibis produces 2 files for each thread: a .seg file and a .coef file.
@@ -91,6 +105,13 @@ sample1 sample2 chrom phys_start_pos phys_end_pos IBD_type gen_start_pos gen_end
 ```
 * IBD_type can be either IBD1 or IBD2
 * error_count and error_density are negative numbers for IBD1 segments that are being printed due to preceeding printed IBD2 segments, and the error information in them is not available to IBIS.
+
+If -bin was employed, the .bseg output will not be human readable, and bseg2seg can be used to convert .bseg files to .seg files.
+Any number of .bseg files can be provided for conversion.
+Example:
+```
+./bseg2seg test1-chr1.fam test1Out.chrom1.bseg test1Out.chrom2.bseg test1Out.chrom3.bseg ...
+```
 
 
 Coef file format:

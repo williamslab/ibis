@@ -1112,58 +1112,61 @@ void printUsageAndExit(){
 	printf("      Specifies the prefix to be used with prefix.bed, prefix.bim, and prefix.fam for the plink format input.\n");
 	printf("      Does not need to be first argument.\n\n\n");
 	printf("OPTIONS:\n");
-	printf(" -mL or -min_l <value>\n");
+	printf(" Threshold parameters:\n");
+	printf("  -mL or -min_l <value>\n");
 	printf("      Specify minimum length for acceptible segments to output.\n");
-	printf("      Defaults to 7 centimorgans.\n\n");
-	printf(" -mL2 or -min_l2 <value>\n");
+	printf("      Defaults to 7 centimorgans.\n");
+	printf("  -mL2 or -min_l2 <value>\n");
 	printf("      Specify minimum length for acceptible segments to output.\n");
-	printf("      Defaults to 2 centimorgans.\n\n");
-	printf(" -er or -errorRate <value>\n");
+	printf("      Defaults to 2 centimorgans.\n");
+	printf("  -er or -errorRate <value>\n");
 	printf("      Specify acceptible error rate in a segment before considering it false.\n");
-	printf("      Defaults to .004 errors per marker.\n\n");
-	printf(" -er2 or -errorRate2 <value>\n");
+	printf("      Defaults to .004 errors per marker.\n");
+	printf("  -er2 or -errorRate2 <value>\n");
 	printf("      Specify acceptible error rate in a segment before considering it false.\n");
-	printf("      Defaults to .008 errors per marker.\n\n");
-	printf(" -f or -file <filename>\n");
-	printf("      Specify output file.\n");
-	printf("      Defaults to ibis.seg\n\n");
-	printf(" -2 or -ibd2\n");
-	printf("      Enable ibd2 analyses.\n\n");
-	printf(" -mt <value>\n");
+	printf("      Defaults to .008 errors per marker.\n");
+	printf("  -mt <value>\n");
 	printf("      Set minimum number of markers required for acceptible segments to output.\n");
-	printf("      Defaults to 448 markers\n\n");
-	printf(" -mt2 <value>\n");
+	printf("      Defaults to 448 markers\n");
+	printf("  -mt2 <value>\n");
 	printf("      Set minimum number of markers required for acceptible segments to output.\n");
-	printf("      Defaults to 192 markers\n\n");
-	printf(" -chr <value>\n");
+	printf("      Defaults to 192 markers\n");
+	printf("  -maxDist <value>\n");
+	printf("      Set a maximum separation distance between SNPs in the input map.\n");
+	printf("      Defaults to being inactive.\n\n");
+	printf(" Execution options\n"); 
+	printf("  -2 or -ibd2\n");
+	printf("      Enable ibd2 analyses.\n");
+	printf("  -chr <value>\n");
 	printf("      Set specific single chromosome to analyse in an input with multiple chromosomes\n");
-	printf("      Defaults to processing all chromosomes in the input\n\n");
-	printf(" -threads <value>\n");
+	printf("      Defaults to processing all chromosomes in the input\n");
+	printf("  -threads <value> or -t <value>\n");
 	printf("      Set the number of threads available to IBIS for parallel processing.\n");
-	printf("      Defaults to 1\n\n");
-	printf(" -gzip\n");
-	printf("      Have the program output gzipped segment files\n\n");
-	printf(" -noConvert\n");
+	printf("      Defaults to 1\n");
+	printf("  -noConvert\n");
 	printf("      Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100\n");
 	printf("      IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables\n\n");
-	printf(" -printCoef\n");
-	printf("      Have IBIS print .coef files in addition to segment files.\n\n");
-	printf(" -c <value>\n");
+	printf(" Output controls\n");
+	printf("  -f or -file <filename>\n");
+	printf("      Specify output file.\n");
+	printf("      Defaults to ibis.seg\n");
+	printf("  -gzip\n");
+	printf("      Have the program output gzipped segment files\n");
+	printf("  -printCoef\n");
+	printf("      Have IBIS print .coef files in addition to segment files.\n");
+	printf("  -c <value>\n");
 	printf("      Set a minimum kinship coefficient for IBIS to print, omitting pairs of lower relatedness from the output.\n");
-	printf("      Defaults to 0.\n\n");
-	printf(" -d or -degree <value>\n");
+	printf("      Defaults to 0.\n");
+	printf("  -d or -degree <value>\n");
 	printf("      Set a minimum degree of relatedness for IBIS to print, omitting pairs of lower relatedness from the output.\n");
-	printf("      Defaults to including all degrees.\n\n");
-	printf(" -a <value>\n");
+	printf("      Defaults to including all degrees.\n");
+	printf("  -a <value>\n");
 	printf("      Set a supplemental factor for IBIS to add to kinship coefficients and use for degree classification.\n");
-	printf("      Defaults to 0.00138.\n\n");
-	printf(" -noFamID\n");
-	printf("      Have the program omit family IDs from the output, including only individual IDs.\n\n");
-	printf(" -bin\n");
+	printf("      Defaults to 0.00138.\n");
+	printf("  -noFamID\n");
+	printf("      Have the program omit family IDs from the output, including only individual IDs.\n");
+	printf("  -bin or -binary\n");
 	printf("      Have the program print the .seg file in binary format. Requires tool to interpret.\n\n");
-	printf(" -maxDist <value>\n");
-	printf("      Set a maximum separation distance between SNPs in the input map.\n");
-	printf("      Defaults to being inactive.\n\n"); 
 	exit(1);
 
 
@@ -1171,8 +1174,8 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.19.1";
-	const char* RELEASE_DATE = "February 20, 2020";
+	const char* VERSION_NUMBER = "1.19.2";
+	const char* RELEASE_DATE = "March 9, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
@@ -1266,7 +1269,7 @@ int main(int argc, char **argv) {
 			distForce=true;
 			printf("%s - forcing morgan format input and output\n",arg.c_str());
 		}
-		else if(arg=="-threads"){
+		else if(arg=="-threads" || "-t"){
 			numThreads=atoi(argv[i+1]);
 			printf("%s - running with %i threads\n",arg.c_str(), numThreads);
 		}
@@ -1316,11 +1319,11 @@ int main(int argc, char **argv) {
 	}
 	if(bFileNamesGiven)
 	{
-		PersonIO<PersonLoopData>::readData(bfileNameBed, bfileNameBim, bfileNameFam, /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true);
+		PersonIO<PersonLoopData>::readData(bfileNameBed, bfileNameBim, bfileNameFam, /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true,  /*useParents=*/ false);
 	}
 	else{
 		printf("No -b or -bfile - Running with input files: %s, %s, %s\n",argv[1], argv[2], argv[3]);
-		PersonIO<PersonLoopData>::readData(argv[1], argv[2], argv[3], /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true);
+		PersonIO<PersonLoopData>::readData(argv[1], argv[2], argv[3], /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true, /*useParents=*/ false);
 	}
 	if(numThreads==0){
 		numThreads = 1;
