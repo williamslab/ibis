@@ -74,7 +74,7 @@ or
 	* set the number of threads available to IBIS for parallel processing.
 * -noConvert
 	* Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100
-	* IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -force disables
+	* IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables
 ### Output controls:
 * -f or file \<filename\>           
 	* Specify output file prefix.
