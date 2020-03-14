@@ -4,7 +4,7 @@ IBIS is a fast IBD Segment calling algorithm aimed at large, unphased genome dat
 
 ### Compiling IBIS
 
-First, ensure install zlib, including developmental headers (e.g., the zlib1g-dev package on Ubuntu).
+First, ensure zlib, including developmental headers, is installed (e.g., the `zlib1g-dev` package on Ubuntu).
 
 Next, clone the repository by running
 
@@ -16,17 +16,17 @@ Now, compile by running
 
     make
 
-in the repository directory (i.e., `cd ibis` then `make`).
+in the repository directory (i.e., run `cd ibis` then `make`).
 
 To pull IBIS updates, use
 
-   git pull --recurse-submodules
+    git pull --recurse-submodules
 
-(Or `git pull` followed by `git submodule update --remote`.)
+(Or use `git pull` followed by `git submodule update --remote`.)
 
 ### Supported input format
 
-IBIS requires PLINK .bed, .bim, and .fam format data to run. PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
+IBIS requires PLINK binary format data to run (.bed, .bim, and .fam files). PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
 
 ### IBIS Usage
 
