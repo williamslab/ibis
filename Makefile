@@ -1,5 +1,5 @@
-CPPSRCS = IBIS.cc
-
+GENETIOSRCS = genetio/personio.cc genetio/marker.cc genetio/superperson.cc genetio/personloopdata.cc genetio/personbulk.cc genetio/nuclearfamily.cc genetio/util.cc
+CPPSRCS = IBIS.cc $(GENETIOSRCS)
 CSRCS= 
 OBJS= $(patsubst %.cc,%.o,$(CPPSRCS)) $(patsubst %.c,%.o,$(CSRCS))
 
@@ -23,7 +23,7 @@ ifdef PROFILE       # to use run `make PROFILE=1
   CFLAGS += -pg
 endif
 
-LIBS= -lgenetio -lz
+LIBS= -lz
 
 # dependency variables / commands
 DEPDIR = .deps

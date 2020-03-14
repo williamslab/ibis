@@ -1,0 +1,3 @@
+[submodule "genetio"]
+	path = genetio
+	url = https://github.com/williamslab/genetio.git
