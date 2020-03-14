@@ -9,7 +9,7 @@ EXEC = ibis
 GPP = g++
 GCC = gcc
 DEFINES= 
-CFLAGS = -Wall $(DEFINES) -fopenmp -mpopcnt
+CFLAGS = -I. -Wall $(DEFINES) -fopenmp -mpopcnt
 # -march=native
 CPPFLAGS = -std=c++11 $(CFLAGS)
 ifdef DEBUG           # to use run `make DEBUG=1`
