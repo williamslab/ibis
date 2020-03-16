@@ -79,7 +79,7 @@ or
 ### Output controls:
 * -f \<filename\> or -o \<filename\> or -file \<filename\>         
 	* Specify output file prefix.
-	* Defaults to ibis, resulting in ibis.seg.\<thread number\> and ibis.coef.\<thread number\> and will output a separate output file for each thread.
+	* Defaults to ibis, resulting in ibis.seg and ibis.coef.
 * -bin or -binary
 	* Have the program print the .seg file in binary format. Requires bseg2seg.cc to interpret.
 * -gzip
