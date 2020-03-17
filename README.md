@@ -10,7 +10,7 @@ Next, clone the repository by running
 
     git clone --recurse-submodules https://github.com/williamslab/ibis.git
 
-(Alternatively, `git clone [repo]` followed by `git submodule update --remote` in the cloned directory will do the same as the above.)
+(Alternatively, `git clone [repo]` followed by `git submodule update --init` in the cloned directory will do the same as the above.)
 
 Now, compile by running
 
@@ -22,7 +22,7 @@ To pull IBIS updates, use
 
     git pull --recurse-submodules
 
-(Or use `git pull` followed by `git submodule update --remote`.)
+(Or use `git pull` followed by `git submodule update --init`.)
 
 ### Supported input format
 
