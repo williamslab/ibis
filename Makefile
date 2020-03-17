@@ -24,7 +24,9 @@ ifdef PROFILE       # to use run `make PROFILE=1
 endif
 
 LIBS= -lz
-
+ifdef RELEASE
+  LIBS += -static-libstdc++ -static-libgcc
+endif
 # dependency variables / commands
 DEPDIR = .deps
 df = $(DEPDIR)/$(*F)
