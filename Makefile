@@ -9,7 +9,7 @@ EXEC = ibis
 GPP = g++
 GCC = gcc
 DEFINES= 
-CFLAGS = -I. -Wall $(DEFINES) -fopenmp -mpopcnt
+CFLAGS = -I. -Wall $(DEFINES)
 # -march=native
 CPPFLAGS = -std=c++11 $(CFLAGS)
 ifdef DEBUG           # to use run `make DEBUG=1`
@@ -31,12 +31,17 @@ endif
 DEPDIR = .deps
 df = $(DEPDIR)/$(*F)
 
-all: $(EXEC) bseg2seg
+all: $(EXEC) bseg2seg seg2coef
 
 $(EXEC): $(OBJS) $(HEADERS)
-	$(GPP) -o $(EXEC) $(OBJS) $(CFLAGS) $(LIBS)
+	$(GPP) -o $(EXEC) $(OBJS) $(CFLAGS) $(LIBS) -fopenmp -mpopcnt
+
 bseg2seg: bseg2seg.cc
 	$(GPP) -o $@ $^ $(CFLAGS)
+
+seg2coef: seg2coef.cc
+	$(GPP) -o $@ $^ $(CFLAGS)
+
 # This way of building dependencies (per-file) described at
 # http://make.paulandlesley.org/autodep.html
 
