@@ -24,19 +24,18 @@ To pull IBIS updates, use
 
 (Or use `git pull` followed by `git submodule update --remote`.)
 
-### Supported input format
+### Steps for running IBIS
+    1. Convert input data into PLINK binary format (.bed, .bim, and .fam).
+       IBIS requires PLINK binary format data to run. PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
+    2. Insert a genetic map into the bim file using the included add-map-plink.pl executable.
+       IBIS relies on the genetic map in column 3 of the input .bim file to determine how long a potential IBD segment is. A good human genetic map is the HapMap II map, available [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/) (as of this writing, the latest version for build 37 is in [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz)).
 
-IBIS requires PLINK binary format data to run (.bed, .bim, and .fam files). PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
+       The `add-map-plink.pl` script inserts a genetic map in this HapMap format into a bim file. Given `my.bim`, thee following creates a file `new.bim` with a genetic map:
 
-### Including a genetic map in the input
+       ./add-map-plink.pl my.bim [map directory]/genetic_map_GRCh37_chr{1..22}.txt > new.bim
 
-IBIS relies on the genetic map in column 3 of the input .bim file to determine how long a potential IBD segment is. A good human genetic map is the HapMap II map, available [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/) (as of this writing, the latest version for build 37 is in [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz)).
-
-The `add-map-plink.pl` script inserts a genetic map in this HapMap format into a bim file. Given `my.bim`, thee following creates a file `new.bim` with a genetic map:
-
-    ./add-map-plink.pl my.bim [map directory]/genetic_map_GRCh37_chr{1..22}.txt > new.bim
-
-The above works in bash.
+       The above works in bash.
+    3. Run IBIS using the specifications described below.
 
 ### IBIS Usage
 
