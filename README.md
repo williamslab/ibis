@@ -32,7 +32,7 @@ To pull IBIS updates, use
     * A good human genetic map is the HapMap II map, available [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/)
     * As of this writing, the latest version for build 37 is in [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz).
     * The `add-map-plink.pl` script inserts a genetic map in this HapMap format into a bim file. Given `my.bim`, the following creates a file `new.bim` with a genetic map:
-        * ./add-map-plink.pl my.bim [map directory]/genetic_map_GRCh37_chr{1..22}.txt > new.bim
+        * ```./add-map-plink.pl my.bim [map directory]/genetic_map_GRCh37_chr{1..22}.txt > new.bim ```
         * The above works in bash.
 3. Run IBIS using the specifications described below.
 
