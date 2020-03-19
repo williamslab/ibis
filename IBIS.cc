@@ -673,8 +673,8 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 	if(index1End==0)
 		index1End=numIndivs;
 	std::vector<SegmentData> storedSegs;
-	for(uint64_t indiv1=index1Start; indiv1<index1End; indiv1++){
-		for(uint64_t indiv2=indiv1+1; indiv2<numIndivs; indiv2++){
+	for(uint64_t indiv1=index1Start; indiv1<((uint64_t)index1End); indiv1++){
+		for(uint64_t indiv2=indiv1+1; indiv2<((uint64_t)numIndivs); indiv2++){
 			float totalIBD1Length = 0;
 			float totalIBD2Length = 0;
 
@@ -935,8 +935,8 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 
 		std::vector<SegmentData> storedSegs;
 #pragma omp for schedule(dynamic, 60)
-		for(uint64_t indiv1 = index1Start; indiv1<index1End; indiv1++){
-			for(uint64_t indiv2 = indiv1+1; indiv2<numIndivs; indiv2++){
+		for(uint64_t indiv1 = index1Start; indiv1<((uint64_t)index1End); indiv1++){
+			for(uint64_t indiv2 = indiv1+1; indiv2<((uint64_t)numIndivs); indiv2++){
 				float totalIBD1Length = 0;
 				float totalIBD2Length = 0;
 
