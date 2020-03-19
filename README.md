@@ -1,6 +1,6 @@
 # IBIS
 
-IBIS is a fast IBD Segment calling algorithm aimed at large, unphased genome datasets.
+IBIS is a fast IBD Segment calling algorithm aimed at large, unphased genetic datasets.
 
 ### Compiling IBIS
 
@@ -22,20 +22,21 @@ To pull IBIS updates, use
 
     git pull --recurse-submodules
 
-(Or use `git pull` followed by `git submodule update --init`.)
+(Or use `git pull` followed by `git submodule update --remote`.)
 
 ### Steps for running IBIS
+
 1. Convert input data into PLINK binary format (.bed, .bim, and .fam).
-    * IBIS requires PLINK binary format data to run. PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
-2. Insert a genetic map into the bim file using the included add-map-plink.pl executable.
-    * IBIS relies on the genetic map in column 3 of the input .bim file to determine how long a potential IBD segment is.
-    * A good human genetic map is the HapMap II map, available:
-        * [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/)
-    * As of this writing, the latest version for build 37 is in:
-        * [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz)
-    * The `add-map-plink.pl` script inserts a genetic map in this HapMap format into a bim file. Given `my.bim`, the following creates a file `new.bim` with a genetic map:
-        * ```./add-map-plink.pl my.bim [map directory]/genetic_map_GRCh37_chr{1..22}.txt > new.bim ```
-        * The above works in bash.
+   * Running [PLINK](https://www.cog-genomics.org/plink2/) with `--make-bed` enables conversion from many other forms of genetic data into this file format.
+
+2. Insert a genetic map into the bim file using `add-map-plink.pl` (in this repository).
+  * A good human genetic map is the HapMap II map, available [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/). (As of this writing, the latest version for build 37 is [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz).)
+  * Example `add-map-plink.pl` command using bash:
+
+    ./add-map-plink.pl my.bim [map directory]/genetic_map_GRCh37_chr{1..22}.txt > new.bim
+
+  this creates a file `new.bim` with the genetic map inserted. (For non-bash environments, supply the file for each chromosome after the bim file: `./add-map-plink.pl my.bim genetic_map_GRCh37_chr1.txt genetic_map_GRCh37_chr2.txt genetic_map_GRCh37_chr3.txt ...`
+
 3. Run IBIS using the specifications described below.
 
 ### IBIS Usage
@@ -58,70 +59,74 @@ or
 ```
 ### IBIS Options:
 ### Threshold parameters:
-* -mL or -min_l \<value\>            
+* `-mL` or `-min_l <value>`
 	* Specify minimum length for acceptible segments to output.
 	* Defaults to 7 centimorgans.
-* -mL2 or -min_l2 \<value\>
+* `-mL2` or `-min_l2 <value>`
 	* Specify minimum length for acceptible IBD2 segments to output.
 	* Defaults to 2 centimorgans.
-* -er or -errorRate \<value\>        
+* `-er` or `-errorRate <value>`
 	* specify acceptible error rate in a segment before considering it false.                           
 	* Defaults to .004 errors per marker
-* -er2 or -errorRate2 \<value\>
+* `-er2` or `-errorRate2 <value>`
 	*specify acceptible error rate in an IBD2 segment before considering it false.
-* -mt \<value\>                     
+* `-mt <value>`
 	* Specify a minimum number of markers required for a segment to be printed.
-* -mt2 \<value\> 
+* `-mt2 <value>`
 	* Specify a minimum number of markers required for an IBD2 segment to be printed.
-* -maxDist \<value\>
+* `-maxDist <value>`
 	* Set a maximum separation distance between SNPs in the input map.
 	* Defaults to being inactive.
+
 ### Execution options:
-* -2 or -ibd2                     
+* `-2` or `-ibd2`
 	* enable ibd2 analyses
-* -chr \<value\>
+* `-chr <value>`
 	* Specify a single chromosome for IBIS to process when given an input file with multiple chromosomes.
-* -t \<value\> or -threads \<value\>                
+* `-t <value>` or `-threads <value>`
 	* set the number of threads available to IBIS for parallel processing.
-* -noConvert
+* `-noConvert`
 	* Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100
-	* IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables
+	* IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, `-noConvert` disables
+
 ### Output controls:
-* -f \<filename\> or -o \<filename\> or -file \<filename\>         
+* `-f <filename>` or `-o <filename>` or `-file <filename>`
 	* Specify output file prefix.
 	* Defaults to ibis, resulting in ibis.seg and ibis.coef.
-* -bin or -binary
+* `-bin` or `-binary`
 	* Have the program print the .seg file in binary format. Requires bseg2seg.cc to interpret.
-* -gzip
+* `-gzip`
 	* Have the progrem output gzipped segment and coef files.
-* -noFamID
+* `-noFamID`
 	* Have IBIS use only the individual ID in its output notations.
-	* Defaults to \<fam ID\>:\<indiv ID\>
+	* Defaults to `<fam ID>:<indiv ID>`
+
 ### Kinship coefficient file options:
-* -printCoef
-	* Have the progrem print the .coef files. 
-* -a \<value\>
+* `-printCoef`
+	* Have the program print the .coef files. 
+* `-a <value>`
 	* Set a different supplemental coefficient factor to add to pairs.
 	* Defaults to 0.00138
-* -d \<value\>
+* `-d <value>`
 	* Set a minimum degree of relatedness. Pairs with more distant degrees will not be printed to the output.
-	* Mutually exclusive with -c
-* -c \<value\>
+	* Mutually exclusive with `-c`
+* `-c <value>`
 	* Set a minimum kinship coefficient. Pairs with lower kinship will not be printed to the output.
-	* Mutually exclusive with -d
+	* Mutually exclusive with `-d`
 
 ### IBIS Output
 
-Ibis produces 2 files for each thread: a .seg file and a .coef file.
+IBIS produces a .seg or .bseg file and, when using `-printCoef`, a .coef file.
 
-Thread file format:
+Segment file format:
 ```
 sample1 sample2 chrom phys_start_pos phys_end_pos IBD_type gen_start_pos gen_end_pos seg_length marker_count error_count error_density
 ```
-* IBD_type can be either IBD1 or IBD2
-* error_count and error_density are negative numbers for IBD1 segments that are being printed due to preceeding printed IBD2 segments, and the error information in them is not available to IBIS.
+* `IBD_type` can be either IBD1 or IBD2
+* `error_count` and `error_density` are negative numbers for IBD1 segments that precede IBD2 segments. The error information in them is not specifically tracked by IBIS.
 
-If -bin was employed, the .bseg output will not be human readable, and bseg2seg can be used to convert .bseg files to .seg files.
+If `-bin` is employed, the .bseg output will not be human readable, and bseg2seg can be used to convert .bseg files to .seg format.
+
 Any number of .bseg files can be provided for conversion.
 Example:
 ```
