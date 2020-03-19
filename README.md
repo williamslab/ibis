@@ -155,7 +155,7 @@ The total map length in cM is available in the .bim file. The maplen.awk script 
 
     ./maplen.awk [bim files ...]
 
-*Example seg2coef execution* using data subdivided into chromosomes as `data[chr].{bed,bim,fam}`, with IBIS segments in `output[chr].seg`:
+**Example seg2coef execution** using data subdivided into chromosomes as `data[chr].{bed,bim,fam}`, with IBIS segments in `output[chr].seg`:
 
     ./maplen.awk data{1..22}.bim
     ./seg2coef [Total_length] data1.fam output{1..22}.seg > output.coef
