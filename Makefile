@@ -9,7 +9,7 @@ EXEC = ibis
 GPP = g++
 GCC = gcc
 DEFINES= 
-CFLAGS = -I. -Wall $(DEFINES)
+CFLAGS = -I. -Wall $(DEFINES) -fopenmp -mpopcnt
 # -march=native
 CPPFLAGS = -std=c++11 $(CFLAGS)
 ifdef DEBUG           # to use run `make DEBUG=1`
@@ -34,7 +34,7 @@ df = $(DEPDIR)/$(*F)
 all: $(EXEC) bseg2seg seg2coef
 
 $(EXEC): $(OBJS) $(HEADERS)
-	$(GPP) -o $(EXEC) $(OBJS) $(CFLAGS) $(LIBS) -fopenmp -mpopcnt
+	$(GPP) -o $(EXEC) $(OBJS) $(CFLAGS) $(LIBS)
 
 bseg2seg: bseg2seg.cc
 	$(GPP) $(CPPFLAGS) -o $@ $^
