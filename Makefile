@@ -72,7 +72,7 @@ tags: $(SRCS) *.h
 	ctags --language-force=c++ --extra=+q --fields=+i --excmd=n *.cc *.h
 
 clean:
-	rm -f $(EXEC) $(OBJS) bseg2seg
+	rm -f $(EXEC) $(OBJS) bseg2seg seg2coef
 
 clean-deps:
 	rm -f $(DEPDIR)/*.P
