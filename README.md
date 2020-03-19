@@ -35,8 +35,6 @@ To pull IBIS updates, use
         * ```./add-map-plink.pl my.bim [map directory]/genetic_map_GRCh37_chr{1..22}.txt > new.bim ```
         * The above works in bash.
 3. Run IBIS using the specifications described below.
-[here][1]
-[here][2]
 [1]: ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/
 [2]: ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz
 
