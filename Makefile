@@ -37,10 +37,10 @@ $(EXEC): $(OBJS) $(HEADERS)
 	$(GPP) -o $(EXEC) $(OBJS) $(CFLAGS) $(LIBS) -fopenmp -mpopcnt
 
 bseg2seg: bseg2seg.cc
-	$(GPP) -o $@ $^ $(CFLAGS)
+	$(GPP) $(CPPFLAGS) -o $@ $^
 
 seg2coef: seg2coef.cc
-	$(GPP) -o $@ $^ $(CFLAGS)
+	$(GPP) $(CPPFLAGS) -o $@ $^
 
 # This way of building dependencies (per-file) described at
 # http://make.paulandlesley.org/autodep.html
