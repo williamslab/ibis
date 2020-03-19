@@ -29,8 +29,8 @@ To pull IBIS updates, use
     * IBIS requires PLINK binary format data to run. PLINK can be run with --make-bed to convert many other forms of genetic data into this file format.
 2. Insert a genetic map into the bim file using the included add-map-plink.pl executable.
     * IBIS relies on the genetic map in column 3 of the input .bim file to determine how long a potential IBD segment is.
-    * A good human genetic map is the HapMap II map, available [ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/].
-    * As of this writing, the latest version for build 37 is in [ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz].
+    * A good human genetic map is the HapMap II map, available <ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/>.
+    * As of this writing, the latest version for build 37 is in <ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz>.
     * The `add-map-plink.pl` script inserts a genetic map in this HapMap format into a bim file. Given `my.bim`, the following creates a file `new.bim` with a genetic map:
         * ```./add-map-plink.pl my.bim [map directory]/genetic_map_GRCh37_chr{1..22}.txt > new.bim ```
         * The above works in bash.
