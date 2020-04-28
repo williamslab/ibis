@@ -20,9 +20,8 @@ in the repository directory (i.e., run `cd ibis` then `make`).
 
 To pull IBIS updates, use
 
-    git pull --recurse-submodules
-
-(Or use `git pull` followed by `git submodule update --remote`.)
+    git pull
+    git submodule update --remote
 
 ### Steps for running IBIS
 
