@@ -222,17 +222,9 @@ class HomozygAndMiss{
 			hom2 = 0;
 			miss = 0;
 		}
-		void zero();//Currently unused?
 		void addBits(uint64_t h1, uint64_t h2, uint64_t m);//setter function.
 };
 
-
-
-void HomozygAndMiss::zero(){
-	hom1 = 0;
-	hom2 = 0;
-	miss = 0;
-}
 
 void HomozygAndMiss::addBits(uint64_t h1, uint64_t h2, uint64_t m){//Places single-bit values in the input into the bit sets.
 	hom1+=h1;
@@ -1190,9 +1182,9 @@ int main(int argc, char **argv) {
 	bool bFileNamesGiven = false;//Toggle for input as one argument or 3.
 	bool distForce = false;//If true, stops the program from converting the input to cM.
 	bool gzip = false;//If True, gzips the output.
-	float errorDensityThreshold = 0.004, errorDensityThreshold2 = 0.008;//Maximum allowed error rates.
+	float errorThreshold = 0.004, errorThreshold2 = 0.008;//Maximum allowed error rates.
 	float min_markers = 447, min_markers2 = 191;//Marker minimums for segments.
-	const char* chrom = NULL;//Checks for specified chromosome. Optional, but required if the input contains multiple chromosomes.
+	const char* chrom = NULL;//Which chromosome to analyze? If null, analyzes all input chromosomes
 	int numThreads;//Input threadnumber.
 	numThreads=0;
 	bool noFams = 0;
@@ -1234,12 +1226,12 @@ int main(int argc, char **argv) {
 			printf("%s - running with minimum IBD2 length %f\n",arg.c_str(),min_length2);
 		}
 		else if( arg =="-er" || arg == "-errorRate"){
-			errorDensityThreshold=atof(argv[i+1]);
-			printf("%s - running with error rate %f\n",arg.c_str(), errorDensityThreshold);
+			errorThreshold=atof(argv[i+1]);
+			printf("%s - running with error rate %f\n",arg.c_str(), errorThreshold);
 		}
 		else if(arg =="-er2" || arg == "-errorRate2"){
-			errorDensityThreshold2=atof(argv[i+1]);
-			printf("%s - running with error rate %f\n",arg.c_str(), errorDensityThreshold2);
+			errorThreshold2=atof(argv[i+1]);
+			printf("%s - running with error rate %f\n",arg.c_str(), errorThreshold2);
 
 		}
 		else if( arg =="-f" || arg == "-file" || arg == "-o"){
@@ -1343,18 +1335,12 @@ int main(int argc, char **argv) {
 		numThreads = 1;
 	}
 
-	if(Marker::getNumChroms() > 65535){
+	if(Marker::getNumChroms() > UINT16_MAX-1){
 		printf("IBIS cannot handle more than %d different chromosomes in the input due to formatting issues. Please separate them and run ibis on subsets of these.\n",UINT16_MAX-1);
 		exit(1);
 	}
 
 	numIndivs = PersonLoopData::_allIndivs.length();
-
-	//Name change here for error thresholds.
-	float errorThreshold = errorDensityThreshold; 
-	float errorThreshold2 = errorDensityThreshold2;
-
-
 
 	numMarkers = Marker::getNumMarkers();
 	uint64_t indBlocks = (numIndivs + 63) / 64; //blocks are based on the number of individuals
