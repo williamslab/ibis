@@ -385,6 +385,15 @@ void storeSegment(SegmentData& currentSegment, std::vector<SegmentData> &storedS
 	currentSegment.selfErase();
 }
 
+void storeSegOneBack(SegmentData& currentSegment, std::vector<SegmentData> &storedSegments, float &totalIBD1, float &totalIBD2){
+	auto it = storedSegments.end();
+	// Insert one behind last segment:
+	storedSegments.insert( it - 1, currentSegment );
+	totalIBD1+=currentSegment.cMLength() * (currentSegment.ibdType == 1);
+	totalIBD2+=currentSegment.cMLength() * (currentSegment.ibdType == 2);
+	currentSegment.selfErase();
+}
+
 //Open the segment and kinship coefficient output files
 template<class IO_TYPE>
 void openSegCoefOut(FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, std::string &filename, std::string &extension, bool printCoef, bool binary, bool printFam) {
@@ -464,7 +473,7 @@ bool handleIBD1PostIBD2(SegmentData &ibd1Segment,  std::vector<SegmentData> &sto
 		ibd1Segment.updateSegmentEndpoints(ibd2Segment.startPos,0,0);
 		ibd1Segment.errorCount = -1;
 		int ibd1EndPosHolder = ibd1Segment.endPos;
-		storeSegment(ibd1Segment, storedSegments, totalIBD1, totalIBD2);
+		storeSegOneBack(ibd1Segment, storedSegments, totalIBD1, totalIBD2);
 		ibd1Segment.updateSegmentStartpoints(ibd2Segment.endPos);
 		ibd1Segment.updateSegmentEndpoints(ibd1EndPosHolder, 0, 0);
 		ibd1Segment.errorCount = ibd2Segment.trackedErrorIBD1;//Necessary to put real error count back into ongoing IBD1 segment.
