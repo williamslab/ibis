@@ -26,6 +26,14 @@
 #include <assert.h>
 
 
+//Thresholds for degree calling
+//When IBD1 and IBD2 segments called
+//These are as in the KING paper: 2^-(degree + 1.5) [except degree 0]
+float ibd2Thresholds[9] = { 0.475, 0.176776695, 0.088388348, 0.044194174, 0.022097087, 0.011048543, 0.005524272, 0.002762136 };
+//When only IBD status (either IBD1 or 2) is known, how much IBD0? (fractional)
+//These are as in the KING paper: degree 1 fixed; others are
+// 1 - 2^-(degree + 0.5)
+float ibd0Thresholds[9] = { 0, 0.365, 0.6464466, 0.8232233, 0.9116117, 0.9558058, 0.9779029, 0.9889515, 0.9944757 };
 
 template<typename IO_TYPE>
 class FileOrGZ {
@@ -256,7 +264,7 @@ class SegmentData{
 		int ibdType; // Either 1 or 2 depending on nature of IBD for the segment.
 		bool realIBD2; // Marks IBD1 segments that were contiguous with a stored real IBD2 segment.
 		int chrom; //index of chrom name in the input .bim file.
-		std::vector<float> * altMap;
+		static std::vector<float> * altMap;// based on maxDif/maxDist parameter
 		SegmentData(){
 			startPos = -1;
 			startFloat = -1;//genetic start position of ongoing segment.
@@ -269,7 +277,7 @@ class SegmentData{
 			realIBD2 = false;
 		}
 
-		template<class IO_TYPE>	
+		template<class IO_TYPE>
 			void printSegment(FileOrGZ<IO_TYPE> &pFile, int ind1, int ind2, bool binary);
 
 		float cMLength();
@@ -280,11 +288,13 @@ class SegmentData{
 		bool checkSegment(float min_length, int marker_length);
 		bool hasStart();
 		void selfErase();
-		void trackIBD1Errors();	
+		void trackIBD1Errors();
 
 
 };
 
+//Declare static member
+std::vector<float> * SegmentData::altMap;
 
 inline float SegmentData::cMLength(){return endFloat-startFloat;}
 inline int SegmentData::markerLength(){return endPos-startPos+1;}
@@ -375,25 +385,66 @@ void storeSegment(SegmentData& currentSegment, std::vector<SegmentData> &storedS
 	currentSegment.selfErase();
 }
 
-//Find the lowest order non-zero bit in the uint64_t, and return it in a uint64_t with only that bit set to 1.
-inline uint64_t lowestSetBit(uint64_t bitSet)
-{
-	return (-bitSet) & bitSet;
+//Open the segment and kinship coefficient output files
+template<class IO_TYPE>
+void openSegCoefOut(FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, std::string &filename, std::string &extension, bool printCoef, bool binary, bool printFam) {
+	std::string threadname;
+	std::string binExt;
+
+	bool success;
+	if(binary)
+		binExt="b";
+	else
+		binExt="";
+	threadname = filename +"."+binExt+"seg"+extension;
+	if(binary)
+		success = pFile.open(threadname.c_str(), "wb");
+	else
+		success = pFile.open(threadname.c_str(), "w");
+
+	if(!success){
+		printf("\nERROR: could not open output file %s!\n", threadname.c_str());
+		perror("open");
+		exit(1);
+	}
+	if(binary){
+		uint8_t openVal = 129;
+
+		pFile.pfwrite(&openVal,sizeof(openVal),1);
+		int totalChromNameSize = 0;
+		for(int chr = 0; chr< Marker::getNumChroms(); chr++){
+			totalChromNameSize+=strlen(Marker::getChromName(chr))+1;
+		}
+		pFile.pfwrite(&totalChromNameSize,sizeof(totalChromNameSize),1);
+		for(int chr = 0; chr< Marker::getNumChroms(); chr++){
+			pFile.pfwrite(Marker::getChromName(chr),sizeof(char),strlen(Marker::getChromName(chr))+1);
+		}
+
+		uint8_t pFam = uint8_t(printFam);
+		pFile.pfwrite(&pFam,sizeof(uint8_t),1);
+	}
+
+	if(printCoef) {
+		std::string classFilename;
+		classFilename = filename +".coef"+extension;
+		success = classFile.open(classFilename.c_str(), "w");
+		if(!success){
+			printf("\nERROR: could not open output file %s!\n", classFilename.c_str());
+			perror("open");
+			exit(1);
+		}
+
+
+		classFile.printf("Individual1\tIndividual2\tKinship_Coefficient\tIBD2_Fraction\tSegment_Count\tDegree\n");
+	}
+
 }
-
-//Determine if the two given segments overlap
-inline bool segmentOverlap(int start1, int start2, int end1, int end2){
-	return (end2 >= start1) && (end1 >= start2);//(start1 <= end1 && start1 >= start2) || (end1<=end2 && end1>=start2);
-
-}
-
-
 
 //Segment termination code.
 //Tries to merge given segment with the stored "last" segment. If that fails, checks the ongoing segment against all the criteria for segment validity. If it succeeds, it prints the stored segment and stores the ongoing one in the "last" segment slot.
 //Returns a boolean describing if the segment in storage is a valid segment according to the thresholds, which, as a side effect, will also always be true if the segment just analyzed was valid.
 //template<class IO_TYPE>
-bool endSegment(SegmentData& currentSegment, float min_length, int min_markers,  std::vector<SegmentData> &storedSegments, float &totalIBD1, float &totalIBD2){ 
+bool endSegment(SegmentData& currentSegment, float min_length, int min_markers,  std::vector<SegmentData> &storedSegments, float &totalIBD1, float &totalIBD2){
 	bool passedChecks = false;
 	if(currentSegment.checkSegment(min_length, min_markers)){
 		storeSegment(currentSegment, storedSegments, totalIBD1, totalIBD2);
@@ -454,7 +505,7 @@ inline uint64_t findMissIndex(uint64_t markerWindow, uint64_t indiv, uint64_t ne
 
 
 //populate the IBD boolean and error boolean int with true or false depending on if there is valid IBD1 in the current window and if it had any errors in it.
-//Populate the errorCount value with the number of errors. Necessary for merge, error density analyses, and skipping IBD2 analysis when unneeded. 
+//Populate the errorCount value with the number of errors. Necessary for merge, error density analyses, and skipping IBD2 analysis when unneeded.
 void compareWindowsIBD1(uint64_t hom11, uint64_t hom12, uint64_t hom21, uint64_t hom22, int &errorCount, bool &IBD){
 	uint64_t fullCompare = 	(hom11 & hom22) | (hom12 & hom21);//The bitwise comparison for iBD1
 
@@ -477,7 +528,7 @@ void compareWindowsIBD2(uint64_t hom11, uint64_t hom12, uint64_t hom21, uint64_t
 //Transpose the input genotypes into a matrix of individuals as rows and blocks of markers as columns to speed up our analyses. Populates transposedData with homozygosity bit sets, and missingData with bit sets of where data is missing.
 void interleaveAndConvertData(HomozygAndMiss transposedData[], int64_t indBlocks64, uint64_t markerWindows, uint64_t markers, int64_t individuals, std::vector<int> &starts, std::vector<int> &ends,  uint64_t chromWindowStarts[]) {
 
-	printf("Organizing genotype data for analysis... "); 
+	printf("Organizing genotype data for analysis... ");
 	fflush(stdout);
 	uint64_t dataBlocks = ((individuals+3)/4);//Breakdown of the 8 bit block counts based on the number of individuals in the input. Not the blocks in our own internal data format.
 
@@ -578,27 +629,162 @@ void interleaveAndConvertData(HomozygAndMiss transposedData[], int64_t indBlocks
 	printf("done.\n");
 }
 
+template<class IO_TYPE>
+void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMiss transposedData[], int numIndivs, int markerWindows, std::vector<int> &starts, std::vector<int> &ends, uint64_t chromWindowBoundaries[][2], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, float min_coef, float fudgeFactor, bool binary, bool printFam, omp_lock_t *lock, FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, float totalGeneticLength) {
+
+	for(uint64_t indiv2 = indiv1+1; indiv2<((uint64_t)numIndivs); indiv2++){
+		float totalIBD1Length = 0;
+		float totalIBD2Length = 0;
+
+		SegmentData currentIBD1Segment;// = new SegmentData;
+		SegmentData currentIBD2Segment;// = new SegmentData;
+		currentIBD1Segment.ibdType = 1;
+
+		//IBD2 equivalents of the previously described variables.
+		currentIBD2Segment.ibdType = 2;
+
+		HomozygAndMiss *ind1Data = seek(transposedData,indiv1,markerWindows);//Stores the indices of the startpoints for the two individuals in the stored homozygous data and missing data.
+		HomozygAndMiss *ind2Data = seek(transposedData,indiv2,markerWindows);
+
+
+		for(int chr = 0; chr < Marker::getNumChroms(); chr++){
+			currentIBD1Segment.chrom = chr;
+			currentIBD2Segment.chrom = chr;
+			for(uint64_t markerWindow=chromWindowBoundaries[chr][0]; markerWindow<=chromWindowBoundaries[chr][1]; markerWindow++){
+				//Booleans for the status of the IBD conclusions for the current window comparison.
+				bool isIBD1;
+				bool isIBD2;
+
+				int windowErrorCount;
+				int windowErrorCount2;
+
+
+				compareWindowsIBD1(ind1Data->hom1, ind1Data->hom2, ind2Data->hom1, ind2Data->hom2, windowErrorCount, isIBD1);
+
+				//Don't bother checking IBD2 if there are too many errors in IBD1.
+				if(ibd2 && isIBD1){
+					compareWindowsIBD2(ind1Data->hom1, ind1Data->hom2, ind2Data->hom1, ind2Data->hom2, ind1Data->miss, ind2Data->miss, windowErrorCount2, isIBD2);
+				}
+				else{
+					isIBD2=false;
+					windowErrorCount2=3;
+				}
+
+				if(ibd2){//The check for if IBD2 is enabled
+					if(isIBD2){
+						int currentEndPos = ends[markerWindow];
+						if(windowErrorCount2>0){
+							if(currentIBD2Segment.hasStart() && currentIBD2Segment.errorCheck(windowErrorCount2, currentEndPos, errorThreshold2)){//Update potential endpoint if error threshold passed.
+								bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
+								if(realSeg){
+									handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
+								}
+								currentIBD2Segment.selfErase();//May be unnecessary relic from earlier draft. Some of these are, some aren't.
+							}
+							else{//Update endpoints if no errors
+								currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);
+							}
+						}
+						else{
+
+							if(!currentIBD2Segment.hasStart())//Update startopint if there is no current real segment.
+								currentIBD2Segment.updateSegmentStartpoints(starts[markerWindow]);
+							currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);//Update endpoint always.
+						}
+					}
+					else {//If no IBD, attempt to store segment if valid.
+						bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
+						if(realSeg){
+							handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
+						}
+						currentIBD2Segment.selfErase();
+					}
+				}
+
+
+
+				if(isIBD1){
+					int currentEndPos = ends[markerWindow];
+					if(windowErrorCount>0){
+						if(currentIBD1Segment.hasStart() && currentIBD1Segment.errorCheck(windowErrorCount, currentEndPos, errorThreshold)){
+							endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
+							currentIBD1Segment.selfErase();
+						}
+						else{
+							currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+						}
+					}
+					else{
+						if(!currentIBD1Segment.hasStart())
+							currentIBD1Segment.updateSegmentStartpoints(starts[markerWindow]);
+						currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+					}
+				}
+				else {
+					endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
+					currentIBD1Segment.selfErase();
+				}
+
+				ind1Data++;
+				ind2Data++;
+			}
+			//Handle the end of chromosomes, as there is no end of IBD or error density increase to trigger these segments to print otherwise.
+
+			if(ibd2){
+				//Attempt to print IBD2 at the end of the chromosome if there is a valid segment.
+				bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
+				if(realSeg){
+					handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
+				}
+			}
+			//Attempt to print IBD1 at the end of the chromosome if there is a valid segment.
+			endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
+			currentIBD1Segment.selfErase();
+			currentIBD2Segment.selfErase();
+		}
+
+
+		//Perform relationship inference and compare to coefficient threshold.
+		float relCoef = (0.25*totalIBD1Length+0.5*totalIBD2Length)/totalGeneticLength + fudgeFactor;//NOTE: Currently uses IBD2-based coefficient threshold whether or not IBD2 is enabled.
+		float ibd1TotalMod = (1 - (totalIBD1Length + 4 * fudgeFactor)/totalGeneticLength);
+
+		if(relCoef >= min_coef){//Only prints if current pair is sufficiently related.
+			if (lock)
+				omp_set_lock(lock);
+			if(printCoef){
+				int classVal;
+				if(ibd2){
+					for(classVal=0; classVal<8; classVal++){//find degree of relatedness
+						if((relCoef)>ibd2Thresholds[classVal]){
+							break;
+						}
+					}
+				}
+				else{
+					for(classVal=0; classVal<8; classVal++){//find degree of relatedness
+						if(ibd1TotalMod<ibd0Thresholds[classVal]){
+							break;
+						}
+					}
+				}
+				if(classVal==8)
+					classVal=-1;//notation for unrelated
+				classFile.printf("%s\t%s\t%f\t%f\t%i\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
+			}
+			for (SegmentData seg: storedSegs){
+				seg.printSegment(pFile,indiv1,indiv2,binary);
+			}
+			if (lock)
+				omp_unset_lock(lock);
+		}
+		storedSegs.clear();
+	}
+}
+
 //Loop over the individuals and windows and perform the segment analysis.
 //Used only for monothreaded case to avoid overhead of OMP.
 template<class IO_TYPE>
-void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor, int index1Start, int index1End, bool binary, std::vector<float> * altMap, bool printFam){	
-
-
-
-	float totalGeneticLength = 0.0;//Value to use as whole input genetic length for calculating coefficients.
-	for(int chr = 0; chr < Marker::getNumChroms(); chr++)
-		totalGeneticLength += (Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos() - Marker::getMarker( Marker::getFirstMarkerNum( chr ) )->getMapPos());
-	float ibd1Thresholds[9];//Thresholds for class calling
-	float ibd2Thresholds[9];
-	ibd1Thresholds[0]=0;
-	ibd1Thresholds[1]=0.365;//Hardcode for IBD1 only 1st threshold due to not following the formula.
-	for(int i = 2; i<=8; i++)
-		ibd1Thresholds[i] = 1-(1.0/pow(2.0,((i-1)+1.5)));
-
-
-	ibd2Thresholds[0]=0.475;
-	for(int i = 1; i<=8; i++)
-		ibd2Thresholds[i] = (1.0/(pow(2.0,(i+1.5))));
+void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string &filename, std::string &extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor, int index1Start, int index1End, bool binary, float totalGeneticLength, bool printFam){
 
 	//Transposes the input matrix and handles the 8->64 bit format conversion..
 	interleaveAndConvertData(transposedData, indBlocks, markerWindows, numMarkers, numIndivs, starts, ends,  chromWindowStarts);
@@ -609,217 +795,16 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 
 
 
-	std::string threadname;
 	FileOrGZ<IO_TYPE> pFile;
 	FileOrGZ<IO_TYPE> classFile;
-	std::string binExt;
 
+	openSegCoefOut(pFile, classFile, filename, extension, printCoef, binary, printFam);
 
-	threadname = filename +".seg"+extension;
-	std::string fileArgs;
-	bool success;
-	if(binary)
-		binExt="b";
-	else
-		binExt="";
-
-	threadname = filename +"."+binExt+"seg"+extension;
-	if(binary)
-		success = pFile.open(threadname.c_str(), "wb");
-	else
-		success = pFile.open(threadname.c_str(), "w");
-	if(!success){
-		printf("\nERROR: could not open output file %s!\n", threadname.c_str());
-		perror("open");
-		exit(1);
-	}
-	if(binary){
-		uint8_t openVal = 129;
-
-		pFile.pfwrite(&openVal,sizeof(openVal),1);
-		int totalChromNameSize = 0;
-		for(int chr = 0; chr< Marker::getNumChroms(); chr++){
-			totalChromNameSize+=strlen(Marker::getChromName(chr))+1;
-		}
-
-		pFile.pfwrite(&totalChromNameSize,sizeof(totalChromNameSize),1);
-		for(int chr = 0; chr< Marker::getNumChroms(); chr++){
-			pFile.pfwrite(Marker::getChromName(chr),sizeof(char),strlen(Marker::getChromName(chr))+1);        
-		}
-		uint8_t pFam = uint8_t(printFam);
-		pFile.pfwrite(&pFam,sizeof(uint8_t),1); 
-	}
-	if(printCoef){
-		std::string classFilename;
-		classFilename = filename +".coef"+extension;
-		success = classFile.open(classFilename.c_str(), "w");
-		if(!success){
-			printf("\nERROR: could not open output file %s!\n", classFilename.c_str());
-			perror("open");
-			exit(1);
-		}
-
-
-		classFile.printf("Individual1\tIndividual2\tKinship_Coefficient\tIBD2_Fraction\tSegment_Count\tDegree\n");
-	}
 	if(index1End==0)
 		index1End=numIndivs;
 	std::vector<SegmentData> storedSegs;
 	for(uint64_t indiv1=index1Start; indiv1<((uint64_t)index1End); indiv1++){
-		for(uint64_t indiv2=indiv1+1; indiv2<((uint64_t)numIndivs); indiv2++){
-			float totalIBD1Length = 0;
-			float totalIBD2Length = 0;
-
-			SegmentData currentIBD1Segment;// = new SegmentData;
-			SegmentData currentIBD2Segment;// = new SegmentData;
-			currentIBD1Segment.ibdType = 1;
-			currentIBD1Segment.altMap = altMap;
-			currentIBD2Segment.altMap = altMap;
-
-			//IBD2 equivalents of the previously described variables.
-			currentIBD2Segment.ibdType = 2;
-
-			HomozygAndMiss *ind1Data = seek(transposedData,indiv1,markerWindows);//Stores the indices of the startpoints for the two individuals in the stored homozygous data and missing data.
-			HomozygAndMiss *ind2Data = seek(transposedData,indiv2,markerWindows);
-
-
-			for(int chr = 0; chr < Marker::getNumChroms(); chr++){
-				currentIBD1Segment.chrom = chr;
-				currentIBD2Segment.chrom = chr;
-				for(uint64_t markerWindow=chromWindowBoundaries[chr][0]; markerWindow<=chromWindowBoundaries[chr][1]; markerWindow++){
-					//Booleans for the status of the IBD conclusions for the current window comparison.
-					bool isIBD1;
-					bool isIBD2;
-
-					int windowErrorCount;
-					int windowErrorCount2;
-
-
-					compareWindowsIBD1(ind1Data->hom1, ind1Data->hom2, ind2Data->hom1, ind2Data->hom2, windowErrorCount, isIBD1);
-
-					//Don't bother checking IBD2 if there are too many errors in IBD1.
-					if(ibd2 && isIBD1){
-						compareWindowsIBD2(ind1Data->hom1, ind1Data->hom2, ind2Data->hom1, ind2Data->hom2, ind1Data->miss, ind2Data->miss, windowErrorCount2, isIBD2);
-					}
-					else{
-						isIBD2=false;
-						windowErrorCount2=3;
-					}
-
-					if(ibd2){//The check for if IBD2 is enabled
-						if(isIBD2){
-							int currentEndPos = ends[markerWindow];
-							if(windowErrorCount2>0){
-								if(currentIBD2Segment.hasStart() && currentIBD2Segment.errorCheck(windowErrorCount2, currentEndPos, errorThreshold2)){//Update potential endpoint if error threshold passed.
-									bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
-									if(realSeg){
-										handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
-									}
-									currentIBD2Segment.selfErase();//May be unnecessary relic from earlier draft. Some of these are, some aren't.
-								}
-								else{//Update endpoints if no errors.
-									currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);
-								}
-
-							}
-							else{
-
-								if(!currentIBD2Segment.hasStart())//Update startopint if there is no current real segment.
-									currentIBD2Segment.updateSegmentStartpoints(starts[markerWindow]);
-								currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);//Update endpoint always.
-							}
-
-						}
-						else {//If no IBD, attempt to store segment if valid.
-							bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
-							if(realSeg){
-
-								handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
-							}
-							currentIBD2Segment.selfErase();
-						}
-					}
-
-
-
-
-					if(isIBD1){
-						int currentEndPos = ends[markerWindow];
-						if(windowErrorCount>0){
-							if(currentIBD1Segment.hasStart() && currentIBD1Segment.errorCheck(windowErrorCount, currentEndPos, errorThreshold)){
-								endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
-								currentIBD1Segment.selfErase();
-
-							}
-							else{
-								currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
-							}
-
-						}
-						else{
-							if(!currentIBD1Segment.hasStart())
-								currentIBD1Segment.updateSegmentStartpoints(starts[markerWindow]);
-							currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
-						}
-					}
-					else {
-						endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
-						currentIBD1Segment.selfErase();
-					}
-
-					ind1Data++;
-					ind2Data++;
-
-				}
-				//Handle the end of chromosomes, as there is no end of IBD or error density increase to trigger these segments to print otherwise.
-
-				if(ibd2){
-					//Attempt to print IBD2 at the end of the chromosome if there is a valid segment.
-					bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
-					if(realSeg){
-						handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
-					}
-				}
-				//Attempt to print IBD1 at the end of the chromosome if there is a valid segment.
-				endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
-				currentIBD1Segment.selfErase();
-				currentIBD2Segment.selfErase();
-			}
-
-
-
-			//Perform relationship inference and compare to coefficient threshold.
-			float relCoef = (0.25*totalIBD1Length+0.5*totalIBD2Length)/totalGeneticLength + fudgeFactor;//NOTE: Currently uses IBD2-based coefficient threshold whether or not IBD2 is enabled.
-			float ibd1TotalMod = (1 - (totalIBD1Length + 4 * fudgeFactor)/totalGeneticLength);
-
-			if(relCoef >= min_coef){
-				if(printCoef){
-					int classVal;
-					if(ibd2){
-						for(classVal=0; classVal<8; classVal++){
-							if((relCoef)>ibd2Thresholds[classVal]){
-								break;
-							}
-						}
-					}
-					else{
-						for(classVal=0; classVal<8; classVal++){
-							if(ibd1TotalMod<ibd1Thresholds[classVal]){
-								break;
-							}
-						}
-					}
-					if(classVal==8)
-						classVal=-1;
-					classFile.printf("%s\t%s\t%f\t%f\t%i\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
-				}
-				for (SegmentData seg: storedSegs){
-					seg.printSegment(pFile,indiv1,indiv2, binary);
-				}
-			}
-			storedSegs.clear();
-
-		}
+		ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, min_coef, fudgeFactor, binary, printFam, /*lock=None=*/ NULL, pFile, classFile, totalGeneticLength);
 	}
 
 	printf("done.\n");
@@ -829,96 +814,27 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 //Loop over the individuals and windows and perform the segment analysis.
 //Includes OMP multithreading
 template<class IO_TYPE>
-void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string filename, std::string extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor,int index1Start,int index1End, bool binary,std::vector<float> *altMap, bool printFam){	
+void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string &filename, std::string &extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor,int index1Start,int index1End, bool binary, float totalGeneticLength, bool printFam){
 
 	omp_lock_t lock;//Lock for the coefficient/relationship class file
 	omp_init_lock(&lock);
 
 
-
-	float totalGeneticLength = 0.0;//Value to use as whole input genetic length for calculating coefficients.
-	for(int chr = 0; chr < Marker::getNumChroms(); chr++)
-		totalGeneticLength += (Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos() - Marker::getMarker( Marker::getFirstMarkerNum( chr ) )->getMapPos());
-	float ibd1Thresholds[9];//Thresholds for class calling
-	float ibd2Thresholds[9];
-	ibd1Thresholds[0]=0;
-	ibd1Thresholds[1]=0.365;//Hardcode for IBD1 only 1st threshold due to not following the formula.
-	for(int i = 2; i<=8; i++)
-		ibd1Thresholds[i] = 1-(1.0/pow(2.0,((i-1)+1.5)));
-
-
-	ibd2Thresholds[0]=0.475;
-	for(int i = 1; i<=8; i++)
-		ibd2Thresholds[i] = (1.0/(pow(2.0,(i+1.5))));
-
 	//Transposes the input matrix and handles the 8->64 bit format conversion..
 	interleaveAndConvertData(transposedData, indBlocks, markerWindows, numMarkers, numIndivs, starts, ends,  chromWindowStarts);
 
 	omp_set_dynamic(0);     // Explicitly disable dynamic teams
-	omp_set_num_threads(numThreads); //Forces input specified thread number with default 1. 
-	std::string fileArgs;
-	if(binary)
-		fileArgs = "wb";
-	else
-		fileArgs = "w";
+	omp_set_num_threads(numThreads); //Forces input specified thread number with default 1.
+
 	printf("Beginning segment detection with %i thread(s)...",numThreads);
 	fflush(stdout);
 
 
-	std::string threadname;
 	FileOrGZ<IO_TYPE> pFile;
 	FileOrGZ<IO_TYPE> classFile;
 
-	std::string binExt;
+	openSegCoefOut(pFile, classFile, filename, extension, printCoef, binary, printFam);
 
-	bool success;
-	if(binary)
-		binExt="b";
-	else
-		binExt="";                                                                                                                                                                                           
-	threadname = filename +"."+binExt+"seg"+extension;
-	if(binary)
-		success = pFile.open(threadname.c_str(), "wb");
-	else
-		success = pFile.open(threadname.c_str(), "w"); 
-
-
-
-
-	if(!success){
-		printf("\nERROR: could not open output file %s!\n", threadname.c_str());
-		perror("open");
-		exit(1);
-	}
-	if(binary){
-		uint8_t openVal = 129;
-
-		pFile.pfwrite(&openVal,sizeof(openVal),1);
-		int totalChromNameSize = 0;
-		for(int chr = 0; chr< Marker::getNumChroms(); chr++){
-			totalChromNameSize+=strlen(Marker::getChromName(chr))+1;
-		}
-		pFile.pfwrite(&totalChromNameSize,sizeof(totalChromNameSize),1);
-		for(int chr = 0; chr< Marker::getNumChroms(); chr++){                                                                                                                                                                                                   pFile.pfwrite(Marker::getChromName(chr),sizeof(char),strlen(Marker::getChromName(chr))+1);
-		}
-
-		uint8_t pFam = uint8_t(printFam);
-		pFile.pfwrite(&pFam,sizeof(uint8_t),1);
-	}
-
-	if(printCoef){
-		std::string classFilename;
-		classFilename = filename +".coef"+extension;
-		success = classFile.open(classFilename.c_str(), "w");
-		if(!success){
-			printf("\nERROR: could not open output file %s!\n", classFilename.c_str());
-			perror("open");
-			exit(1);
-		}
-
-
-		classFile.printf("Individual1\tIndividual2\tKinship_Coefficient\tIBD2_Fraction\tSegment_Count\tDegree\n");
-	}
 	if(index1End==0)
 		index1End = numIndivs;
 
@@ -928,161 +844,7 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 		std::vector<SegmentData> storedSegs;
 #pragma omp for schedule(dynamic, 60)
 		for(uint64_t indiv1 = index1Start; indiv1<((uint64_t)index1End); indiv1++){
-			for(uint64_t indiv2 = indiv1+1; indiv2<((uint64_t)numIndivs); indiv2++){
-				float totalIBD1Length = 0;
-				float totalIBD2Length = 0;
-
-				SegmentData currentIBD1Segment;// = new SegmentData;
-				SegmentData currentIBD2Segment;// = new SegmentData;
-				currentIBD1Segment.ibdType = 1;
-				currentIBD1Segment.altMap = altMap;
-				currentIBD2Segment.altMap = altMap;
-
-				//IBD2 equivalents of the previously described variables.
-				currentIBD2Segment.ibdType = 2;
-
-				HomozygAndMiss *ind1Data = seek(transposedData,indiv1,markerWindows);//Stores the indices of the startpoints for the two individuals in the stored homozygous data and missing data.
-				HomozygAndMiss *ind2Data = seek(transposedData,indiv2,markerWindows);
-
-
-				for(int chr = 0; chr < Marker::getNumChroms(); chr++){
-					currentIBD1Segment.chrom = chr;
-					currentIBD2Segment.chrom = chr;
-					for(uint64_t markerWindow=chromWindowBoundaries[chr][0]; markerWindow<=chromWindowBoundaries[chr][1]; markerWindow++){
-						//Booleans for the status of the IBD conclusions for the current window comparison.
-						bool isIBD1;
-						bool isIBD2;
-
-						int windowErrorCount;
-						int windowErrorCount2;
-
-
-						compareWindowsIBD1(ind1Data->hom1, ind1Data->hom2, ind2Data->hom1, ind2Data->hom2, windowErrorCount, isIBD1);
-
-						//Don't bother checking IBD2 if there are too many errors in IBD1.
-						if(ibd2 && isIBD1){
-							compareWindowsIBD2(ind1Data->hom1, ind1Data->hom2, ind2Data->hom1, ind2Data->hom2, ind1Data->miss, ind2Data->miss, windowErrorCount2, isIBD2);
-						}
-						else{
-							isIBD2=false;
-							windowErrorCount2=3;
-						}
-
-						if(ibd2){//The check for if IBD2 is enabled
-							if(isIBD2){
-								int currentEndPos = ends[markerWindow];
-								if(windowErrorCount2>0){
-									if(currentIBD2Segment.hasStart() && currentIBD2Segment.errorCheck(windowErrorCount2, currentEndPos, errorThreshold2)){//Update potential endpoint if error threshold passed.
-										bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
-										if(realSeg){
-											handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
-										}
-										currentIBD2Segment.selfErase();//May be unnecessary relic from earlier draft. Some of these are, some aren't.
-									}
-									else{//Update endpoints if no errors.
-										currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);
-									}
-
-								}
-								else{
-
-									if(!currentIBD2Segment.hasStart())//Update startopint if there is no current real segment.
-										currentIBD2Segment.updateSegmentStartpoints(starts[markerWindow]);
-									currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);//Update endpoint always.
-								}
-
-							}
-							else {//If no IBD, attempt to store segment if valid.
-								bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
-								if(realSeg){
-
-									handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
-								}
-								currentIBD2Segment.selfErase();
-							}
-						}
-
-
-
-
-						if(isIBD1){
-							int currentEndPos = ends[markerWindow];
-							if(windowErrorCount>0){
-								if(currentIBD1Segment.hasStart() && currentIBD1Segment.errorCheck(windowErrorCount, currentEndPos, errorThreshold)){
-									endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
-									currentIBD1Segment.selfErase();
-
-								}
-								else{
-									currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
-								}
-
-							}
-							else{
-								if(!currentIBD1Segment.hasStart())
-									currentIBD1Segment.updateSegmentStartpoints(starts[markerWindow]);
-								currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
-							}
-						}
-						else {
-							endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
-							currentIBD1Segment.selfErase();
-						}
-
-						ind1Data++;
-						ind2Data++;
-
-					}
-					//Handle the end of chromosomes, as there is no end of IBD or error density increase to trigger these segments to print otherwise.
-
-					if(ibd2){
-						//Attempt to print IBD2 at the end of the chromosome if there is a valid segment.
-						bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
-						if(realSeg){
-							handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
-						}
-					}
-					//Attempt to print IBD1 at the end of the chromosome if there is a valid segment.
-					endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
-					currentIBD1Segment.selfErase();
-					currentIBD2Segment.selfErase();
-				}
-
-
-
-				//Perform relationship inference and compare to coefficient threshold.
-				float relCoef = (0.25*totalIBD1Length+0.5*totalIBD2Length)/totalGeneticLength + fudgeFactor;//NOTE: Currently uses IBD2-based coefficient threshold whether or not IBD2 is enabled.
-				float ibd1TotalMod = (1 - (totalIBD1Length + 4 * fudgeFactor)/totalGeneticLength);
-
-				if(relCoef >= min_coef){//Only prints if current pair is sufficiently related.
-					omp_set_lock(&lock);	
-					if(printCoef){
-						int classVal;
-						if(ibd2){
-							for(classVal=0; classVal<8; classVal++){//find degree of relatedness
-								if((relCoef)>ibd2Thresholds[classVal]){
-									break;
-								}
-							}
-						}
-						else{
-							for(classVal=0; classVal<8; classVal++){//find degree of relatedness
-								if(ibd1TotalMod<ibd1Thresholds[classVal]){
-									break;
-								}
-							}
-						}
-						if(classVal==8)
-							classVal=-1;//notation for unrelated
-						classFile.printf("%s\t%s\t%f\t%f\t%i\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
-					}
-					for (SegmentData seg: storedSegs){
-						seg.printSegment(pFile,indiv1,indiv2,binary);
-					}
-					omp_unset_lock(&lock);
-				}
-				storedSegs.clear();
-			}
+			ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, min_coef, fudgeFactor, binary, printFam, &lock, pFile, classFile, totalGeneticLength);
 		}
 	}
 	printf("done.\n");
@@ -1126,7 +888,7 @@ void printUsageAndExit(){
 	printf("  -maxDist <value>\n");
 	printf("      Set a maximum separation distance between SNPs in the input map.\n");
 	printf("      Defaults to being inactive.\n\n");
-	printf(" Execution options\n"); 
+	printf(" Execution options\n");
 	printf("  -2 or -ibd2\n");
 	printf("      Enable ibd2 analyses.\n");
 	printf("  -chr <value>\n");
@@ -1199,7 +961,7 @@ int main(int argc, char **argv) {
 	bool binary = false;
 	float maxDif = 100000;
 	if(argc == 1){
-		printUsageAndExit();		
+		printUsageAndExit();
 	}
 	for (int i = 0; i < argc; ++i) {
 		std::string arg = argv[i];
@@ -1346,16 +1108,9 @@ int main(int argc, char **argv) {
 	uint64_t indBlocks = (numIndivs + 63) / 64; //blocks are based on the number of individuals
 	uint64_t markerWindows = 0;
 
-	uint64_t chromBoundaries[Marker::getNumChroms()][2];//Marker indices in the input for the starts and ends of the given chromosomes.
 	uint64_t chromWindowBoundaries[Marker::getNumChroms()][2];//Window indices in the stored data for the starts and ends of the given chromosomes.
 	uint64_t chromWindowStarts[Marker::getNumChroms()];//Total number of 64-marker blocks that comprise all chromosomes before the indexed chromosome in the stored data. Used to find positions of bits in the data.
-	std::vector<float> *altMap = new std::vector<float>;
-
-	for (int chrIndex = 0; chrIndex < Marker::getNumChroms(); chrIndex++) {
-		chromBoundaries[chrIndex][0]=Marker::getFirstMarkerNum(chrIndex);
-		chromBoundaries[chrIndex][1]=Marker::getLastMarkerNum(chrIndex);
-	}
-
+	SegmentData::altMap = new std::vector<float>;
 
 	//Lays out total number of blocks of 64 required to represent all markers in the input.
 	chromWindowStarts[0] = 0;
@@ -1379,22 +1134,22 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	altMap->push_back(Marker::getMarker(0)->getMapPos());
+	SegmentData::altMap->push_back(Marker::getMarker(0)->getMapPos());
 	//Set up alternative map for max distance control.
 	for(int altmark = 1; altmark < Marker::getNumMarkers(); altmark++){
 
 		if(Marker::getMarker(altmark-1)->getChromIdx()==Marker::getMarker(altmark)->getChromIdx()){
 			float diff = Marker::getMarker(altmark)->getMapPos()-Marker::getMarker(altmark-1)->getMapPos();
-			float mv1 = altMap->back()+maxDif;
-			float mv2 = altMap->back()+diff;	
+			float mv1 = SegmentData::altMap->back()+maxDif;
+			float mv2 = SegmentData::altMap->back()+diff;
 			if(mv1>mv2)
-				altMap->push_back(mv2);
+				SegmentData::altMap->push_back(mv2);
 			else
-				altMap->push_back(mv1);
+				SegmentData::altMap->push_back(mv1);
 
 		}
 		else
-			altMap->push_back(Marker::getMarker(altmark)->getMapPos());
+			SegmentData::altMap->push_back(Marker::getMarker(altmark)->getMapPos());
 	}
 
 	HomozygAndMiss *transposedData = new HomozygAndMiss[numIndivs*markerWindows];//Represents the genotypes in the format to be used by IBIS.
@@ -1409,35 +1164,39 @@ int main(int argc, char **argv) {
 	fflush(stdout);
 	for(int chr = 0; chr < Marker::getNumChroms(); chr++){
 		chromWindowBoundaries[chr][0]=starts.size();
-		for(uint64_t x = chromBoundaries[chr][0]; x <= chromBoundaries[chr][1]; x += 64){
+		for(uint64_t x = Marker::getFirstMarkerNum(chr); x <= (uint64_t) Marker::getLastMarkerNum(chr); x += 64){
 			starts.push_back(x);
-			ends.push_back(min(chromBoundaries[chr][1], x + 63));
+			ends.push_back(min(Marker::getLastMarkerNum(chr), x + 63));
 		}
 		chromWindowBoundaries[chr][1]=ends.size()-1;
 	}
 
 
 	printf("done.\n");
-	//Monothreaded to avoid potential overhead. Bad style but a runtime gain.
+
+	float totalGeneticLength = 0.0;//Value to use as whole input genetic length for calculating coefficients.
+	for(int chr = 0; chr < Marker::getNumChroms(); chr++)
+		totalGeneticLength += (Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos() - Marker::getMarker( Marker::getFirstMarkerNum( chr ) )->getMapPos());
+
 	if(numThreads>1){
 		if(gzip){
 			extension = ".gz";
-			segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary,altMap, noFams);	
+			segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary, totalGeneticLength, noFams);
 		}
 		else{
 			extension = "";
-			segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary,altMap, noFams);	
+			segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary, totalGeneticLength, noFams);
 		}
 	}
 	else{
-
+		//Monothreaded to avoid potential overhead. Bad style but a runtime gain.
 		if(gzip){
 			extension = ".gz";
-			segmentAnalysisMonoThread<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary,altMap, noFams);
+			segmentAnalysisMonoThread<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary, totalGeneticLength, noFams);
 		}
 		else{
 			extension = "";
-			segmentAnalysisMonoThread<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary,altMap, noFams);
+			segmentAnalysisMonoThread<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary, totalGeneticLength, noFams);
 		}
 
 	}
