@@ -382,7 +382,6 @@ void storeSegment(SegmentData& currentSegment, std::vector<SegmentData> &storedS
 	storedSegments.push_back((const SegmentData)(currentSegment));
 	totalIBD1+=currentSegment.cMLength() * (currentSegment.ibdType == 1);
 	totalIBD2+=currentSegment.cMLength() * (currentSegment.ibdType == 2);
-	currentSegment.selfErase();
 }
 
 void storeSegOneBack(SegmentData& currentSegment, std::vector<SegmentData> &storedSegments, float &totalIBD1, float &totalIBD2){
@@ -391,7 +390,6 @@ void storeSegOneBack(SegmentData& currentSegment, std::vector<SegmentData> &stor
 	storedSegments.insert( it - 1, currentSegment );
 	totalIBD1+=currentSegment.cMLength() * (currentSegment.ibdType == 1);
 	totalIBD2+=currentSegment.cMLength() * (currentSegment.ibdType == 2);
-	currentSegment.selfErase();
 }
 
 //Open the segment and kinship coefficient output files
@@ -459,6 +457,7 @@ bool endSegment(SegmentData& currentSegment, float min_length, int min_markers, 
 		storeSegment(currentSegment, storedSegments, totalIBD1, totalIBD2);
 		passedChecks = true;
 	}
+	currentSegment.selfErase();
 	return passedChecks;
 
 
@@ -683,15 +682,16 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 					if(isIBD2){
 						int currentEndPos = ends[markerWindow];
 						if(windowErrorCount2>0){
-							if(currentIBD2Segment.hasStart() && currentIBD2Segment.errorCheck(windowErrorCount2, currentEndPos, errorThreshold2)){//Update potential endpoint if error threshold passed.
-								bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
-								if(realSeg){
-									handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
+							if(currentIBD2Segment.hasStart()) {
+								if (currentIBD2Segment.errorCheck(windowErrorCount2, currentEndPos, errorThreshold2)){//Update potential endpoint if error threshold passed.
+									bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
+									if(realSeg){
+										handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
+									}
 								}
-								currentIBD2Segment.selfErase();//May be unnecessary relic from earlier draft. Some of these are, some aren't.
-							}
-							else{//Update endpoints if no errors
-								currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);
+								else{//Update endpoints if no errors
+									currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);
+								}
 							}
 						}
 						else{
@@ -706,7 +706,6 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 						if(realSeg){
 							handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
 						}
-						currentIBD2Segment.selfErase();
 					}
 				}
 
@@ -715,12 +714,13 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 				if(isIBD1){
 					int currentEndPos = ends[markerWindow];
 					if(windowErrorCount>0){
-						if(currentIBD1Segment.hasStart() && currentIBD1Segment.errorCheck(windowErrorCount, currentEndPos, errorThreshold)){
-							endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
-							currentIBD1Segment.selfErase();
-						}
-						else{
-							currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+						if(currentIBD1Segment.hasStart()) {
+							if (currentIBD1Segment.errorCheck(windowErrorCount, currentEndPos, errorThreshold)){
+								endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
+							}
+							else{
+								currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+							}
 						}
 					}
 					else{
@@ -731,7 +731,6 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 				}
 				else {
 					endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
-					currentIBD1Segment.selfErase();
 				}
 
 				ind1Data++;
@@ -748,8 +747,6 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 			}
 			//Attempt to print IBD1 at the end of the chromosome if there is a valid segment.
 			endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
-			currentIBD1Segment.selfErase();
-			currentIBD2Segment.selfErase();
 		}
 
 
@@ -940,8 +937,8 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.19.4";
-	const char* RELEASE_DATE = "May 7, 2020";
+	const char* VERSION_NUMBER = "1.19.5";
+	const char* RELEASE_DATE = "May 18, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
@@ -961,7 +958,7 @@ int main(int argc, char **argv) {
 	bool noFams = 0;
 	bool modifiedCoef = false;//Check if -c or -d argument was already used in the input.
 	std::string filename, extension;//For building the output file.
-	char bfileNameBed[100],bfileNameBim[100],bfileNameFam[100];//locations for input filenames.
+	char *bfileNameBed = NULL, *bfileNameBim = NULL, *bfileNameFam = NULL;//locations for input filenames.
 	float fudgeFactor = 0.00138;
 	int index1Start = 0;
 	int index1End = 0;
@@ -979,12 +976,13 @@ int main(int argc, char **argv) {
 		}
 		else if( arg == "-b" || arg == "-bfile"){
 			bFileNamesGiven = true;
-			strcpy(bfileNameBed, argv[i+1]);
-			strcat(bfileNameBed, ".bed");
-			strcpy(bfileNameBim, argv[i+1]);
-			strcat(bfileNameBim, ".bim");
-			strcpy(bfileNameFam, argv[i+1]);
-			strcat(bfileNameFam, ".fam");
+			uint32_t filenameLength = strlen(argv[i+1]) + 4 + 1; // +1 for '\0'
+			bfileNameBed = new char[filenameLength];
+			bfileNameBim = new char[filenameLength];
+			bfileNameFam = new char[filenameLength];
+			sprintf(bfileNameBed, "%s.bed", argv[i+1]);
+			sprintf(bfileNameBim, "%s.bim", argv[i+1]);
+			sprintf(bfileNameFam, "%s.fam", argv[i+1]);
 			printf("%s - Running with input files: %s, %s, %s\n",arg.c_str(), bfileNameBed, bfileNameBim, bfileNameFam);
 
 		}
