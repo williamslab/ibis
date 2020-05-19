@@ -280,6 +280,9 @@ class SegmentData{
 		template<class IO_TYPE>
 			void printSegment(FileOrGZ<IO_TYPE> &pFile, int ind1, int ind2, bool binary);
 
+		template<class IO_TYPE>
+			void printHBDSegment(FileOrGZ<IO_TYPE> &pFile, int ind);
+
 		float cMLength();
 		int markerLength();
 		bool errorCheck(int newError, int newEndPos, float errorRate);//Confirms segments error
@@ -329,6 +332,11 @@ void SegmentData::printSegment(FileOrGZ<IO_TYPE> &pFile, int ind1, int ind2, boo
 	else
 		pFile.printf("%s\t%s\t%s\t%i\t%i\tIBD%i\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[ind1]->getId(),PersonLoopData::_allIndivs[ind2]->getId(),Marker::getChromName(chrom), Marker::getMarker(startPos)->getPhysPos(), Marker::getMarker(endPos)->getPhysPos(),ibdType, startFloat, endFloat, cMLength(), markerLength(), int(errorCount), float(errorCount) / float(markerLength()));
 
+}
+
+template<class IO_TYPE>
+void SegmentData::printHBDSegment(FileOrGZ<IO_TYPE> &pFile, int ind) {
+	pFile.printf("%s\t%s\t%i\t%i\tHBD\t%f\t%f\t%f\t%i\t%i\t%f\n", PersonLoopData::_allIndivs[ind]->getId(),Marker::getChromName(chrom), Marker::getMarker(startPos)->getPhysPos(), Marker::getMarker(endPos)->getPhysPos(), startFloat, endFloat, cMLength(), markerLength(), int(errorCount), float(errorCount) / float(markerLength()));
 }
 
 //Return true if the segment with the new modifications fails the error threshold test: true if fail, false if pass.
@@ -384,6 +392,11 @@ void storeSegment(SegmentData& currentSegment, std::vector<SegmentData> &storedS
 	totalIBD2+=currentSegment.cMLength() * (currentSegment.ibdType == 2);
 }
 
+void storeHBDSegment(SegmentData& currentSegment, std::vector<SegmentData> &storedSegments, float &totalHBD) {
+	storedSegments.push_back((const SegmentData)(currentSegment));
+	totalHBD+=currentSegment.cMLength();
+}
+
 void storeSegOneBack(SegmentData& currentSegment, std::vector<SegmentData> &storedSegments, float &totalIBD1, float &totalIBD2){
 	auto it = storedSegments.end();
 	// Insert one behind last segment:
@@ -394,7 +407,7 @@ void storeSegOneBack(SegmentData& currentSegment, std::vector<SegmentData> &stor
 
 //Open the segment and kinship coefficient output files
 template<class IO_TYPE>
-void openSegCoefOut(FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, std::string &filename, std::string &extension, bool printCoef, bool binary, bool printFam) {
+void openSegCoefOut(FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, FileOrGZ<IO_TYPE> &hbdFile, FileOrGZ<IO_TYPE> &incoefFile, std::string &filename, std::string &extension, bool printCoef, bool binary, bool printFam, bool hbd) {
 	std::string threadname;
 	std::string binExt;
 
@@ -445,6 +458,40 @@ void openSegCoefOut(FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, std:
 		classFile.printf("Individual1\tIndividual2\tKinship_Coefficient\tIBD2_Fraction\tSegment_Count\tDegree\n");
 	}
 
+	if (hbd) {
+		std::string hbdFilename = filename + ".hbd" + extension;
+		success = hbdFile.open(hbdFilename.c_str(), "w");
+		if (!success) {
+			printf("\nERROR: could not open output file %s!\n", hbdFilename.c_str());
+			perror("open");
+			exit(1);
+		}
+
+		if (printCoef) {
+			std::string incoefFilename;
+			incoefFilename = filename +".incoef"+extension;
+			success = incoefFile.open(incoefFilename.c_str(), "w");
+			if(!success) {
+				printf("\nERROR: could not open output file %s!\n", incoefFilename.c_str());
+				perror("open");
+				exit(1);
+			}
+
+			incoefFile.printf("Individual1\tInbreed_Coefficient\tSegment_Count\n");
+		}
+	}
+}
+
+template<class IO_TYPE>
+void closeSegCoefOut(FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, FileOrGZ<IO_TYPE> &hbdFile, FileOrGZ<IO_TYPE> &incoefFile, bool printCoef, bool hbd) {
+	pFile.close();
+	if (printCoef)
+		classFile.close();
+	if (hbd) {
+		hbdFile.close();
+		if (printCoef)
+			incoefFile.close();
+	}
 }
 
 //Segment termination code.
@@ -461,6 +508,18 @@ bool endSegment(SegmentData& currentSegment, float min_length, int min_markers, 
 	return passedChecks;
 
 
+}
+
+//HBD segment termination code.
+//Returns a boolean describing if the segment in storage is a valid segment according to the thresholds, which, as a side effect, will also always be true if the segment just analyzed was valid.
+bool endHBDSegment(SegmentData& currentSegment, float min_length, int min_markers, std::vector<SegmentData> &storedSegments, float &totalHBD) {
+	bool passedChecks = false;
+	if(currentSegment.checkSegment(min_length, min_markers)) {
+		storeHBDSegment(currentSegment, storedSegments, totalHBD);
+		passedChecks = true;
+	}
+	currentSegment.selfErase();
+	return passedChecks;
 }
 
 //Breaks and prints underlying IBD1 segment after IBD2 segment confirmed to be real. Also updates IBD1 ongoing segment data.
@@ -531,6 +590,16 @@ void compareWindowsIBD2(uint64_t hom11, uint64_t hom12, uint64_t hom21, uint64_t
 	errorCount = __builtin_popcountl(fullCompare);
 	IBD = errorCount < 3;
 	return;
+}
+
+//populate the HBD boolean with true or false depending on if there is valid HBD in the current window and if it had any errors in it.
+//Population the errorCount value with the number of heterozygous sites in the window.
+void compareWindowHBD(uint64_t hom1, uint64_t hom2, uint64_t missing, int &errorCount, bool &HBD) {
+	// want heterozygous sites, which is sites that are _not_ homozygous 1 or 2 or missing
+	uint64_t fullCompare = ~(hom1 | hom2 | missing);
+
+	errorCount = __builtin_popcountl(fullCompare);
+	HBD = errorCount < 3;
 }
 
 //Transpose the input genotypes into a matrix of individuals as rows and blocks of markers as columns to speed up our analyses. Populates transposedData with homozygosity bit sets, and missingData with bit sets of where data is missing.
@@ -638,8 +707,9 @@ void interleaveAndConvertData(HomozygAndMiss transposedData[], int64_t indBlocks
 }
 
 template<class IO_TYPE>
-void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMiss transposedData[], int numIndivs, int markerWindows, std::vector<int> &starts, std::vector<int> &ends, uint64_t chromWindowBoundaries[][2], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, float min_coef, float fudgeFactor, bool binary, bool printFam, omp_lock_t *lock, FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, float totalGeneticLength) {
+void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMiss transposedData[], int numIndivs, int markerWindows, std::vector<int> &starts, std::vector<int> &ends, uint64_t chromWindowBoundaries[][2], int min_markers, float min_length, int min_markers2, float min_length2, int min_markers_hbd, float min_length_hbd, float errorThreshold, float errorThreshold2, float errorThresholdHBD, bool ibd2, bool hbd, bool printCoef, float min_coef, float fudgeFactor, bool binary, bool printFam, omp_lock_t *lock, FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, FileOrGZ<IO_TYPE> &hbdFile, FileOrGZ<IO_TYPE> &incoefFile, float totalGeneticLength) {
 
+	// search for IBD from <indiv1> to all individuals with higher indexes:
 	for(uint64_t indiv2 = indiv1+1; indiv2<((uint64_t)numIndivs); indiv2++){
 		float totalIBD1Length = 0;
 		float totalIBD2Length = 0;
@@ -785,12 +855,68 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 		}
 		storedSegs.clear();
 	}
+
+	if (!hbd) {
+		// no HBD detection: done
+		return;
+	}
+
+	// run HBD detection on indiv1
+	HomozygAndMiss *ind1Data = seek(transposedData, indiv1, markerWindows);
+
+	float totalHBDLength = 0;
+	SegmentData currentHBDSegment;
+
+	for(int chr = 0; chr < Marker::getNumChroms(); chr++) {
+		currentHBDSegment.chrom = chr;
+		for(uint64_t markerWindow=chromWindowBoundaries[chr][0]; markerWindow<=chromWindowBoundaries[chr][1]; markerWindow++) {
+
+			bool isHBD;
+			int windowErrorCount;
+
+			compareWindowHBD(ind1Data->hom1, ind1Data->hom2, ind1Data->miss, windowErrorCount, isHBD);
+
+			if (isHBD) {
+				int currentEndPos = ends[markerWindow];
+				if (windowErrorCount > 0) {
+					if (currentHBDSegment.hasStart()) {
+						if (currentHBDSegment.errorCheck(windowErrorCount, currentEndPos, errorThresholdHBD))
+							endHBDSegment(currentHBDSegment, min_length_hbd, min_markers_hbd, storedSegs, totalHBDLength);
+						else
+							currentHBDSegment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+					}
+				}
+				else {
+					if(!currentHBDSegment.hasStart())
+						currentHBDSegment.updateSegmentStartpoints(starts[markerWindow]);
+					currentHBDSegment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+				}
+			}
+			else {
+				endHBDSegment(currentHBDSegment, min_length_hbd, min_markers_hbd, storedSegs, totalHBDLength);
+			}
+
+			ind1Data++;
+		}
+		//Handle the end of chromosomes, as there is no end of IBD or error density increase to trigger these segments to print otherwise.
+		endHBDSegment(currentHBDSegment, min_length_hbd, min_markers_hbd, storedSegs, totalHBDLength);
+	}
+
+	if (printCoef && (min_coef == 0.0 || totalHBDLength > 0.0)) {
+		// Print inbreeding coefficient if either the minimum kinship coefficient is 0 (thus all pairs printed) or if there's some HBD length
+		float inbreedCoef = totalHBDLength / totalGeneticLength;
+		incoefFile.printf("%s\t%f\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(), inbreedCoef, storedSegs.size());
+	}
+	for (SegmentData seg: storedSegs) {
+		seg.printHBDSegment(hbdFile,indiv1);
+	}
+	storedSegs.clear();
 }
 
 //Loop over the individuals and windows and perform the segment analysis.
 //Used only for monothreaded case to avoid overhead of OMP.
 template<class IO_TYPE>
-void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string &filename, std::string &extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor, int index1Start, int index1End, bool binary, float totalGeneticLength, bool printFam){
+void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string &filename, std::string &extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, int min_markers_hbd, float min_length_hbd, float errorThreshold, float errorThreshold2, float errorThresholdHBD, bool ibd2, bool hbd, bool printCoef, int numThreads, float min_coef, float fudgeFactor, int index1Start, int index1End, bool binary, float totalGeneticLength, bool printFam){
 
 	//Transposes the input matrix and handles the 8->64 bit format conversion..
 	interleaveAndConvertData(transposedData, indBlocks, markerWindows, numMarkers, numIndivs, starts, ends,  chromWindowStarts);
@@ -803,15 +929,19 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 
 	FileOrGZ<IO_TYPE> pFile;
 	FileOrGZ<IO_TYPE> classFile;
+	FileOrGZ<IO_TYPE> hbdFile;
+	FileOrGZ<IO_TYPE> incoefFile;
 
-	openSegCoefOut(pFile, classFile, filename, extension, printCoef, binary, printFam);
+	openSegCoefOut(pFile, classFile, hbdFile, incoefFile, filename, extension, printCoef, binary, printFam, hbd);
 
 	if(index1End==0)
 		index1End=numIndivs;
 	std::vector<SegmentData> storedSegs;
 	for(uint64_t indiv1=index1Start; indiv1<((uint64_t)index1End); indiv1++){
-		ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, min_coef, fudgeFactor, binary, printFam, /*lock=None=*/ NULL, pFile, classFile, totalGeneticLength);
+		ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, /*lock=None=*/ NULL, pFile, classFile, hbdFile, incoefFile, totalGeneticLength);
 	}
+
+	closeSegCoefOut(pFile, classFile, hbdFile, incoefFile, printCoef, hbd);
 
 	printf("done.\n");
 }
@@ -820,7 +950,7 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 //Loop over the individuals and windows and perform the segment analysis.
 //Includes OMP multithreading
 template<class IO_TYPE>
-void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string &filename, std::string &extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, float errorThreshold, float errorThreshold2, bool ibd2, bool printCoef, int numThreads, float min_coef, float fudgeFactor,int index1Start,int index1End, bool binary, float totalGeneticLength, bool printFam){
+void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBlocks, int numMarkers, int markerWindows, std::vector<int> &starts, std::vector<int> &ends,  std::string &filename, std::string &extension, uint64_t chromWindowBoundaries[][2], uint64_t chromWindowStarts[], int min_markers, float min_length, int min_markers2, float min_length2, int min_markers_hbd, float min_length_hbd, float errorThreshold, float errorThreshold2, float errorThresholdHBD, bool ibd2, bool hbd, bool printCoef, int numThreads, float min_coef, float fudgeFactor,int index1Start,int index1End, bool binary, float totalGeneticLength, bool printFam){
 
 	omp_lock_t lock;//Lock for the coefficient/relationship class file
 	omp_init_lock(&lock);
@@ -838,8 +968,10 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 
 	FileOrGZ<IO_TYPE> pFile;
 	FileOrGZ<IO_TYPE> classFile;
+	FileOrGZ<IO_TYPE> hbdFile;
+	FileOrGZ<IO_TYPE> incoefFile;
 
-	openSegCoefOut(pFile, classFile, filename, extension, printCoef, binary, printFam);
+	openSegCoefOut(pFile, classFile, hbdFile, incoefFile, filename, extension, printCoef, binary, printFam, hbd);
 
 	if(index1End==0)
 		index1End = numIndivs;
@@ -850,9 +982,12 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 		std::vector<SegmentData> storedSegs;
 #pragma omp for schedule(dynamic, 60)
 		for(uint64_t indiv1 = index1Start; indiv1<((uint64_t)index1End); indiv1++){
-			ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, min_coef, fudgeFactor, binary, printFam, &lock, pFile, classFile, totalGeneticLength);
+			ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, &lock, pFile, classFile, hbdFile, incoefFile, totalGeneticLength);
 		}
 	}
+
+	closeSegCoefOut(pFile, classFile, hbdFile, incoefFile, printCoef, hbd);
+
 	printf("done.\n");
 }
 
@@ -872,31 +1007,11 @@ void printUsageAndExit(){
 	printf("      Specifies the prefix to be used with prefix.bed, prefix.bim, and prefix.fam for the plink format input.\n");
 	printf("      Does not need to be first argument.\n\n\n");
 	printf("OPTIONS:\n");
-	printf(" Threshold parameters:\n");
-	printf("  -mL or -min_l <value>\n");
-	printf("      Specify minimum length for acceptible segments to output.\n");
-	printf("      Defaults to 7 centimorgans.\n");
-	printf("  -mL2 or -min_l2 <value>\n");
-	printf("      Specify minimum length for acceptible segments to output.\n");
-	printf("      Defaults to 2 centimorgans.\n");
-	printf("  -er or -errorRate <value>\n");
-	printf("      Specify acceptible error rate in a segment before considering it false.\n");
-	printf("      Defaults to .004 errors per marker.\n");
-	printf("  -er2 or -errorRate2 <value>\n");
-	printf("      Specify acceptible error rate in a segment before considering it false.\n");
-	printf("      Defaults to .008 errors per marker.\n");
-	printf("  -mt <value>\n");
-	printf("      Set minimum number of markers required for acceptible segments to output.\n");
-	printf("      Defaults to 448 markers\n");
-	printf("  -mt2 <value>\n");
-	printf("      Set minimum number of markers required for acceptible segments to output.\n");
-	printf("      Defaults to 192 markers\n");
-	printf("  -maxDist <value>\n");
-	printf("      Set a maximum separation distance between SNPs in the input map.\n");
-	printf("      Defaults to being inactive.\n\n");
 	printf(" Execution options\n");
 	printf("  -2 or -ibd2\n");
 	printf("      Enable ibd2 analyses.\n");
+	printf("  -hbd\n");
+	printf("      Enable HBD segment detection.\n");
 	printf("  -chr <value>\n");
 	printf("      Set specific single chromosome to analyse in an input with multiple chromosomes\n");
 	printf("      Defaults to processing all chromosomes in the input\n");
@@ -905,8 +1020,41 @@ void printUsageAndExit(){
 	printf("      Defaults to 1\n");
 	printf("  -noConvert\n");
 	printf("      Prevent IBIS from attempting to convert putative Morgan genetic positions to centiMorgans by multiplying these by 100\n");
-	printf("      IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables\n\n");
-	printf(" Output controls\n");
+	printf("      IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables\n");
+	printf("  -maxDist <value>\n");
+	printf("      Set a maximum separation distance between SNPs in the input map.\n");
+	printf("      Defaults to being inactive.\n\n");
+	printf(" IBD threshold parameters:\n");
+	printf("  -er or -errorRate <value>\n");
+	printf("      Specify acceptable error rate in a segment before considering it false.\n");
+	printf("      Defaults to .004 errors per marker.\n");
+	printf("  -mL or -min_l <value>\n");
+	printf("      Specify minimum length for acceptable segments to output.\n");
+	printf("      Defaults to 7 centimorgans.\n");
+	printf("  -mt <value>\n");
+	printf("      Set minimum number of markers required for acceptable segments to output.\n");
+	printf("      Defaults to 448 markers\n\n");
+	printf(" IBD2 threshold parameters:\n");
+	printf("  -er2 or -errorRate2 <value>\n");
+	printf("      Specify acceptable error rate in a segment before considering it false.\n");
+	printf("      Defaults to .008 errors per marker.\n");
+	printf("  -mL2 or -min_l2 <value>\n");
+	printf("      Specify minimum length for acceptable segments to output.\n");
+	printf("      Defaults to 2 centimorgans.\n");
+	printf("  -mt2 <value>\n");
+	printf("      Set minimum number of markers required for acceptable segments to output.\n");
+	printf("      Defaults to 192 markers\n\n");
+	printf(" HBD threshold parameters:\n");
+	printf("  -erH or -errorRateH <value>\n");
+	printf("      Specify acceptable error rate in an HBD segment before considering it false.\n");
+	printf("      Defaults to .008 errors per marker.\n");
+	printf("  -mLH or -min_lH <value>\n");
+	printf("      Specify minimum length for acceptable segments to output.\n");
+	printf("      Defaults to 3 centimorgans.\n");
+	printf("  -mtH <value>\n");
+	printf("      Set minimum number of markers required for acceptable segments to output.\n");
+	printf("      Defaults to 192 markers\n\n");
+	printf(" Output controls:\n");
 	printf("  -f <filename> or -o <filename> or -file <filename>\n");
 	printf("      Specify output file.\n");
 	printf("      Defaults to ibis.seg\n");
@@ -916,7 +1064,7 @@ void printUsageAndExit(){
 	printf("      Have the program output gzipped segment files\n");
 	printf("  -noFamID\n");
 	printf("      Have the program omit family IDs from the output, including only individual IDs.\n\n");
-	printf("Kinship coefficient file options\n");
+	printf(" Kinship coefficient file options:\n");
 	printf("  -printCoef\n");
 	printf("      Have IBIS print .coef files in addition to segment files.\n");
 	printf("  -a <value>\n");
@@ -937,21 +1085,22 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.19.5";
-	const char* RELEASE_DATE = "May 18, 2020";
+	const char* VERSION_NUMBER = "1.20";
+	const char* RELEASE_DATE = "May 19, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
-	float min_length = 7.0, min_length2 = 2.0;//cM minimum lengths
+	float min_length = 7.0, min_length2 = 2.0, min_length_hbd = 3.0;//cM minimum lengths
 	float min_coef = 0.0;//coefficient threshold for output.
 	bool printCoef = false;
 	bool noPrefixGiven = true;//Check if no input file is given.
 	bool ibd2 = false;//Check if IBD2 is requested.
+	bool hbd = false; // detect HBD segments
 	bool bFileNamesGiven = false;//Toggle for input as one argument or 3.
 	bool distForce = false;//If true, stops the program from converting the input to cM.
 	bool gzip = false;//If True, gzips the output.
-	float errorThreshold = 0.004, errorThreshold2 = 0.008;//Maximum allowed error rates.
-	float min_markers = 447, min_markers2 = 191;//Marker minimums for segments.
+	float errorThreshold = 0.004, errorThreshold2 = 0.008, errorThresholdHBD = 0.008;//Maximum allowed error rates.
+	float min_markers = 447, min_markers2 = 191, min_markers_hbd = 191;//Marker minimums for segments.
 	const char* chrom = NULL;//Which chromosome to analyze? If null, analyzes all input chromosomes
 	int numThreads;//Input threadnumber.
 	numThreads=0;
@@ -994,14 +1143,22 @@ int main(int argc, char **argv) {
 			min_length2 =  atof(argv[i + 1]);
 			printf("%s - running with minimum IBD2 length %f\n",arg.c_str(),min_length2);
 		}
+		else if (arg == "-mLH" || arg == "-min_lH") {
+			min_length_hbd = atof(argv[i + 1]);
+			printf("%s - running with minimum HBD length %f\n",arg.c_str(),min_length_hbd);
+		}
 		else if( arg =="-er" || arg == "-errorRate"){
 			errorThreshold=atof(argv[i+1]);
 			printf("%s - running with error rate %f\n",arg.c_str(), errorThreshold);
 		}
 		else if(arg =="-er2" || arg == "-errorRate2"){
 			errorThreshold2=atof(argv[i+1]);
-			printf("%s - running with error rate %f\n",arg.c_str(), errorThreshold2);
+			printf("%s - running with IBD2 error rate %f\n",arg.c_str(), errorThreshold2);
 
+		}
+		else if (arg == "-erH" || arg == "-errorRateHBD") {
+			errorThresholdHBD = atof(argv[i+1]);
+			printf("%s - running with HBD error rate %f\n",arg.c_str(), errorThresholdHBD);
 		}
 		else if( arg =="-f" || arg == "-file" || arg == "-o"){
 			std::string fileTemp(argv[i+1]);
@@ -1017,6 +1174,10 @@ int main(int argc, char **argv) {
 			min_markers2=atoi(argv[i+1])-1;
 			printf("%s - running with minimum IBD2 marker threshold of %f\n",arg.c_str(), min_markers2);
 		}
+		else if (arg == "-mtH"){
+			min_markers_hbd = atoi(argv[i+1])-1;
+			printf("%s - running with minimum HBD marker threshold of %f\n",arg.c_str(), min_markers_hbd);
+		}
 
 		else if(arg =="-chr"){
 			chrom = argv[i+1];
@@ -1025,6 +1186,10 @@ int main(int argc, char **argv) {
 		else if(arg=="-ibd2" || arg == "-2"){
 			ibd2=true;
 			printf("%s - running with IBD2 detection enabled\n",arg.c_str());
+		}
+		else if (arg == "-hbd") {
+			hbd = true;
+			printf("%s - runnning with HBD detection enabled\n",arg.c_str());
 		}
 		else if(arg=="-gzip"){
 			gzip = true;
@@ -1188,22 +1353,22 @@ int main(int argc, char **argv) {
 	if(numThreads>1){
 		if(gzip){
 			extension = ".gz";
-			segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary, totalGeneticLength, noFams);
+			segmentAnalysis<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary, totalGeneticLength, noFams);
 		}
 		else{
 			extension = "";
-			segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary, totalGeneticLength, noFams);
+			segmentAnalysis<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, numThreads, min_coef, fudgeFactor, index1Start,index1End, binary, totalGeneticLength, noFams);
 		}
 	}
 	else{
 		//Monothreaded to avoid potential overhead. Bad style but a runtime gain.
 		if(gzip){
 			extension = ".gz";
-			segmentAnalysisMonoThread<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary, totalGeneticLength, noFams);
+			segmentAnalysisMonoThread<gzFile>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary, totalGeneticLength, noFams);
 		}
 		else{
 			extension = "";
-			segmentAnalysisMonoThread<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, errorThreshold, errorThreshold2, ibd2, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary, totalGeneticLength, noFams);
+			segmentAnalysisMonoThread<FILE *>(transposedData, numIndivs, indBlocks, numMarkers, markerWindows, starts, ends, filename, extension, chromWindowBoundaries, chromWindowStarts, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, numThreads, min_coef, fudgeFactor,index1Start,index1End, binary, totalGeneticLength, noFams);
 		}
 
 	}
