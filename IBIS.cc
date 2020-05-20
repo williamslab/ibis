@@ -477,7 +477,7 @@ void openSegCoefOut(FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, File
 				exit(1);
 			}
 
-			incoefFile.printf("Individual1\tInbreed_Coefficient\tSegment_Count\n");
+			incoefFile.printf("Individual\tInbreed_Coefficient\tSegment_Count\n");
 		}
 	}
 }
@@ -1009,7 +1009,7 @@ void printUsageAndExit(){
 	printf("OPTIONS:\n");
 	printf(" Execution options\n");
 	printf("  -2 or -ibd2\n");
-	printf("      Enable ibd2 analyses.\n");
+	printf("      Enable IBD2 analyses.\n");
 	printf("  -hbd\n");
 	printf("      Enable HBD segment detection.\n");
 	printf("  -chr <value>\n");
@@ -1034,39 +1034,39 @@ void printUsageAndExit(){
 	printf("  -mt <value>\n");
 	printf("      Set minimum number of markers required for acceptable segments to output.\n");
 	printf("      Defaults to 448 markers\n\n");
-	printf(" IBD2 threshold parameters:\n");
+	printf(" IBD2 threshold parameters: (use with -2 or -ibd2)\n");
 	printf("  -er2 or -errorRate2 <value>\n");
-	printf("      Specify acceptable error rate in a segment before considering it false.\n");
+	printf("      Specify acceptable error rate in an IBD2 segment before considering it false.\n");
 	printf("      Defaults to .008 errors per marker.\n");
 	printf("  -mL2 or -min_l2 <value>\n");
-	printf("      Specify minimum length for acceptable segments to output.\n");
+	printf("      Specify minimum length for acceptable IBD2 segments to output.\n");
 	printf("      Defaults to 2 centimorgans.\n");
 	printf("  -mt2 <value>\n");
-	printf("      Set minimum number of markers required for acceptable segments to output.\n");
+	printf("      Set minimum number of markers required for acceptable IBD2 segments to output.\n");
 	printf("      Defaults to 192 markers\n\n");
-	printf(" HBD threshold parameters:\n");
+	printf(" HBD threshold parameters: (use with -hbd)\n");
 	printf("  -erH or -errorRateH <value>\n");
 	printf("      Specify acceptable error rate in an HBD segment before considering it false.\n");
 	printf("      Defaults to .008 errors per marker.\n");
 	printf("  -mLH or -min_lH <value>\n");
-	printf("      Specify minimum length for acceptable segments to output.\n");
+	printf("      Specify minimum length for acceptable HBD segments to output.\n");
 	printf("      Defaults to 3 centimorgans.\n");
 	printf("  -mtH <value>\n");
-	printf("      Set minimum number of markers required for acceptable segments to output.\n");
+	printf("      Set minimum number of markers required for acceptable HBD segments to output.\n");
 	printf("      Defaults to 192 markers\n\n");
 	printf(" Output controls:\n");
 	printf("  -f <filename> or -o <filename> or -file <filename>\n");
-	printf("      Specify output file.\n");
-	printf("      Defaults to ibis.seg\n");
+	printf("      Specify output file prefix.\n");
+	printf("      Defaults to ibis\n");
 	printf("  -bin or -binary\n");
 	printf("      Have the program print the .seg file in binary format. Requires tool to interpret.\n");
 	printf("  -gzip\n");
 	printf("      Have the program output gzipped segment files\n");
 	printf("  -noFamID\n");
 	printf("      Have the program omit family IDs from the output, including only individual IDs.\n\n");
-	printf(" Kinship coefficient file options:\n");
+	printf(" Kinship and inbreeding coefficient file options:\n");
 	printf("  -printCoef\n");
-	printf("      Have IBIS print .coef files in addition to segment files.\n");
+	printf("      Have IBIS print a .coef file and a .incoef (with -hbd) file.\n");
 	printf("  -a <value>\n");
 	printf("      Set a supplemental factor for IBIS to add to kinship coefficients and use for degree classification.\n");
 	printf("      Defaults to 0.00138.\n");
