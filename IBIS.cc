@@ -231,6 +231,7 @@ class HomozygAndMiss{
 			miss = 0;
 		}
 		void addBits(uint64_t h1, uint64_t h2, uint64_t m);//setter function.
+		int getMissCount();//getter function
 };
 
 
@@ -238,6 +239,10 @@ void HomozygAndMiss::addBits(uint64_t h1, uint64_t h2, uint64_t m){//Places sing
 	hom1+=h1;
 	hom2+=h2;
 	miss+=m;
+}
+
+int HomozygAndMiss::getMissCount(){//Return count of missing sites for the current sample's window.
+	return (int)__builtin_popcountl(miss);
 }
 
 HomozygAndMiss *seek(HomozygAndMiss *data, uint64_t indiv, uint64_t newMarkerBlocks){//Finds the starting location for a given individual in the data. Later HomozygAndMiss classes for that individual can be reached by adding 1 to the pointer.
@@ -707,10 +712,10 @@ void interleaveAndConvertData(HomozygAndMiss transposedData[], int64_t indBlocks
 }
 
 template<class IO_TYPE>
-void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMiss transposedData[], int numIndivs, int markerWindows, std::vector<int> &starts, std::vector<int> &ends, uint64_t chromWindowBoundaries[][2], int min_markers, float min_length, int min_markers2, float min_length2, int min_markers_hbd, float min_length_hbd, float errorThreshold, float errorThreshold2, float errorThresholdHBD, bool ibd2, bool hbd, bool printCoef, float min_coef, float fudgeFactor, bool binary, bool printFam, omp_lock_t *lock, FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, FileOrGZ<IO_TYPE> &hbdFile, FileOrGZ<IO_TYPE> &incoefFile, float totalGeneticLength) {
+void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMiss transposedData[], int numIndivs, int markerWindows, std::vector<int> &starts, std::vector<int> &ends, uint64_t chromWindowBoundaries[][2], int min_markers, float min_length, int min_markers2, float min_length2, int min_markers_hbd, float min_length_hbd, float errorThreshold, float errorThreshold2, float errorThresholdHBD, bool ibd2, bool hbd, bool printCoef, float min_coef, float fudgeFactor, bool binary, bool printFam, omp_lock_t *lock, FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, FileOrGZ<IO_TYPE> &hbdFile, FileOrGZ<IO_TYPE> &incoefFile, float totalGeneticLength, uint64_t index2End) {
 
 	// search for IBD from <indiv1> to all individuals with higher indexes:
-	for(uint64_t indiv2 = indiv1+1; indiv2<((uint64_t)numIndivs); indiv2++){
+	for(uint64_t indiv2 = indiv1+1; indiv2<=((uint64_t)index2End); indiv2++){
 		float totalIBD1Length = 0;
 		float totalIBD2Length = 0;
 
@@ -935,10 +940,10 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 	openSegCoefOut(pFile, classFile, hbdFile, incoefFile, filename, extension, printCoef, binary, printFam, hbd);
 
 	if(index1End==0)
-		index1End=numIndivs;
+		index1End=numIndivs-1;
 	std::vector<SegmentData> storedSegs;
-	for(uint64_t indiv1=index1Start; indiv1<((uint64_t)index1End); indiv1++){
-		ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, /*lock=None=*/ NULL, pFile, classFile, hbdFile, incoefFile, totalGeneticLength);
+	for(uint64_t indiv1=index1Start; indiv1<=((uint64_t)index1End); indiv1++){
+		ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, /*lock=None=*/ NULL, pFile, classFile, hbdFile, incoefFile, totalGeneticLength, index1End);
 	}
 
 	closeSegCoefOut(pFile, classFile, hbdFile, incoefFile, printCoef, hbd);
@@ -982,7 +987,7 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 		std::vector<SegmentData> storedSegs;
 #pragma omp for schedule(dynamic, 60)
 		for(uint64_t indiv1 = index1Start; indiv1<((uint64_t)index1End); indiv1++){
-			ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, &lock, pFile, classFile, hbdFile, incoefFile, totalGeneticLength);
+			ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, &lock, pFile, classFile, hbdFile, incoefFile, totalGeneticLength, index1End);
 		}
 	}
 
@@ -1235,10 +1240,10 @@ int main(int argc, char **argv) {
 			min_coef = (1.0/(pow(2.0,(atoi(argv[i+1])+1.5))));
 			printf("%s - creating min kinship coefficient threshold from degree %s as %f\n", arg.c_str(),argv[i+1],min_coef);
 		}
-		else if(arg=="-setIndex1End"){
+		else if(arg=="-setIndexEnd"){
 			index1End = atoi(argv[i+1]);
 		}
-		else if(arg=="-setIndex1Start"){
+		else if(arg=="-setIndexStart"){
 			index1Start = atoi(argv[i+1]);
 		}
 		else if(arg=="-maxDist"){
