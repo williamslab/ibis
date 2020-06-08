@@ -1320,9 +1320,13 @@ int main(int argc, char **argv) {
 
 	numIndivs = PersonLoopData::_allIndivs.length();
 	if((uint64_t)index1End > numIndivs-1){
-                printf("Cannot select ending index for samples beyond the final index.");
+                printf("Cannot select ending index for samples beyond the final index.\n");
         	exit(1);
         }
+	else if ((index1End <= index1Start)){
+		printf("Cannot select ending index before starting index.\n");
+		exit(1);
+	}
 	numMarkers = Marker::getNumMarkers();
 	uint64_t indBlocks = (numIndivs + 63) / 64; //blocks are based on the number of individuals
 	uint64_t markerWindows = 0;
