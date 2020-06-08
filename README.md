@@ -73,7 +73,14 @@ or
 * `-maxDist <value>`
 	* Set a maximum separation distance between SNPs in the input map. This is described in more detail in the IBIS paper.
 	* Defaults to being inactive.
-
+* `-setIndexStart <value>`
+	* Set a start index for the set of samples to be compared against all other samples in the input dataset.
+	* Must be greater than or equal to 0.
+	* Defaults to 0, the index of the first sample.
+* `-setIndexEnd <value>`
+	* Set an end index for the set of samples to be compared against all other samples in the input dataset. Includes given index.
+	* Must be less than or equal to n-1, where n is the number of samples in the input.
+	* Defaults to n-1, the index of the last sample.
 #### IBD threshold parameters:
 * `-er <value>` or `-errorRate <value>`
 	* specify acceptable error rate in a segment before considering it false.

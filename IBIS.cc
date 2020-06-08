@@ -266,6 +266,8 @@ class SegmentData{
 		int errorCount; //Total errors considered part of the real ongoing segment.
 		int trackedError; //Errors beyond the current end of the valid segment, extending into the ongoing consecutive error area.
 		int trackedErrorIBD1; //For use in IBD2 segments to correctly calculate the errors in the following IBD1 segment when terminated.
+		int missingness;//Total count of missing sites in a segment;
+		int trackedMissingness;//Missingness beyond the current end of the vlaid segment, extending into the ongoing consecutive error area.
 		int ibdType; // Either 1 or 2 depending on nature of IBD for the segment.
 		bool realIBD2; // Marks IBD1 segments that were contiguous with a stored real IBD2 segment.
 		int chrom; //index of chrom name in the input .bim file.
@@ -276,6 +278,8 @@ class SegmentData{
 			errorCount = 0;//error count of ongoing segment.
 			trackedError = 0;
 			trackedErrorIBD1 = 0;
+			missingness = 0;
+			trackedMissingness = 0;
 			endFloat = -1;
 			endPos = -100;//position of last error free window. Used to backtrack segment endings to the last error free window.
 
@@ -291,7 +295,7 @@ class SegmentData{
 		float cMLength();
 		int markerLength();
 		bool errorCheck(int newError, int newEndPos, float errorRate);//Confirms segments error
-		void updateSegmentEndpoints(int newEndPos, int newError, int newIBD1Error);
+		void updateSegmentEndpoints(int newEndPos, int newError, int newIBD1Error, int newMissingness);
 		void updateSegmentStartpoints(int newStartPos);
 		bool checkSegment(float min_length, int marker_length);
 		bool hasStart();
@@ -305,7 +309,7 @@ class SegmentData{
 std::vector<float> * SegmentData::altMap;
 
 inline float SegmentData::cMLength(){return endFloat-startFloat;}
-inline int SegmentData::markerLength(){return endPos-startPos+1;}
+inline int SegmentData::markerLength(){return endPos-startPos+1-missingness;}
 
 
 template<class IO_TYPE>
@@ -349,17 +353,20 @@ inline bool SegmentData::errorCheck(int newError, int newEndPos, float errorRate
 	return (float(errorCount + trackedError + newError) / float(newEndPos - startPos)) > errorRate;
 }
 
-void SegmentData::updateSegmentEndpoints(int newEndPos, int newError, int newIBD1Error){
+void SegmentData::updateSegmentEndpoints(int newEndPos, int newError, int newIBD1Error, int newMissingness){
 	if(newError<=0){
 		endPos = newEndPos;
 		endFloat = Marker::getMarker(endPos)->getMapPos();
 		errorCount+=trackedError;
 		trackedError = 0;
 		trackedErrorIBD1 = 0;
+		missingness += (trackedMissingness + newMissingness);
+		trackedMissingness = 0;
 	}
 	else{//Won't update real endpoint if there was an error in the window, but tracks the information anyway for error analyses.
 		trackedError += newError;
 		trackedErrorIBD1 += newIBD1Error;
+		trackedMissingness+= newMissingness;
 	}
 }
 
@@ -370,6 +377,8 @@ void SegmentData::updateSegmentStartpoints(int newStartPos){
 	trackedErrorIBD1 = 0;
 	errorCount = 0;
 	realIBD2 = false;
+	missingness = 0;
+	trackedMissingness = 0;
 }
 //Confirms if segment meets relevant conditions to be a valid segment.
 inline bool SegmentData::checkSegment(float min_length, int marker_length){
@@ -387,6 +396,7 @@ void SegmentData::selfErase(){//TODO This may be streamlinable. Will check later
 	endPos = -100;
 	endFloat = -1;
 	errorCount = 0;
+	missingness = 0;
 	realIBD2 = false;
 }
 
@@ -530,17 +540,23 @@ bool endHBDSegment(SegmentData& currentSegment, float min_length, int min_marker
 //Breaks and prints underlying IBD1 segment after IBD2 segment confirmed to be real. Also updates IBD1 ongoing segment data.
 //template<class IO_TYPE>
 //template<class IO_TYPE>
-bool handleIBD1PostIBD2(SegmentData &ibd1Segment,  std::vector<SegmentData> &storedSegments, float &totalIBD1, float &totalIBD2){
+bool handleIBD1PostIBD2(SegmentData &ibd1Segment,  std::vector<SegmentData> &storedSegments, float &totalIBD1, float &totalIBD2, int missingnessCount){
 	SegmentData ibd2Segment = storedSegments.back();
 	if(ibd2Segment.startPos > ibd1Segment.startPos && ibd1Segment.startPos >= 0){
-		ibd1Segment.updateSegmentEndpoints(ibd2Segment.startPos,0,0);
 		ibd1Segment.errorCount = -1;
+		int newSegmentTrackedMissingness = ibd1Segment.trackedMissingness;
+		int prevSegmentMissingness = (ibd1Segment.missingness + ibd1Segment.trackedMissingness - (ibd2Segment.missingness + ibd2Segment.trackedMissingness - missingnessCount));
+		int newSegmentMissingness = ibd1Segment.missingness - prevSegmentMissingness - ibd2Segment.missingness;
+		ibd1Segment.updateSegmentEndpoints(ibd2Segment.startPos,0,0,0);
+		ibd1Segment.missingness = prevSegmentMissingness;
 		int ibd1EndPosHolder = ibd1Segment.endPos;
 		storeSegOneBack(ibd1Segment, storedSegments, totalIBD1, totalIBD2);
 		ibd1Segment.updateSegmentStartpoints(ibd2Segment.endPos);
-		ibd1Segment.updateSegmentEndpoints(ibd1EndPosHolder, 0, 0);
+		ibd1Segment.updateSegmentEndpoints(ibd1EndPosHolder, 0, 0, 0);
+		ibd1Segment.trackedMissingness = newSegmentTrackedMissingness;
 		ibd1Segment.errorCount = ibd2Segment.trackedErrorIBD1;//Necessary to put real error count back into ongoing IBD1 segment.
 		ibd1Segment.realIBD2 = true;
+		ibd1Segment.missingness = newSegmentMissingness;
 		return true;
 	}
 	ibd1Segment.updateSegmentStartpoints(ibd2Segment.endPos);
@@ -605,6 +621,11 @@ void compareWindowHBD(uint64_t hom1, uint64_t hom2, uint64_t missing, int &error
 
 	errorCount = __builtin_popcountl(fullCompare);
 	HBD = errorCount < 3;
+}
+
+uint64_t getMissingness(uint64_t miss1, uint64_t miss2){
+	uint64_t fullCompare = (miss1 | miss2);
+	return (uint64_t)__builtin_popcountl(fullCompare);
 }
 
 //Transpose the input genotypes into a matrix of individuals as rows and blocks of markers as columns to speed up our analyses. Populates transposedData with homozygosity bit sets, and missingData with bit sets of where data is missing.
@@ -715,7 +736,7 @@ template<class IO_TYPE>
 void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMiss transposedData[], int numIndivs, int markerWindows, std::vector<int> &starts, std::vector<int> &ends, uint64_t chromWindowBoundaries[][2], int min_markers, float min_length, int min_markers2, float min_length2, int min_markers_hbd, float min_length_hbd, float errorThreshold, float errorThreshold2, float errorThresholdHBD, bool ibd2, bool hbd, bool printCoef, float min_coef, float fudgeFactor, bool binary, bool printFam, omp_lock_t *lock, FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, FileOrGZ<IO_TYPE> &hbdFile, FileOrGZ<IO_TYPE> &incoefFile, float totalGeneticLength, uint64_t index2End) {
 
 	// search for IBD from <indiv1> to all individuals with higher indexes:
-	for(uint64_t indiv2 = indiv1+1; indiv2<=((uint64_t)index2End); indiv2++){
+	for(uint64_t indiv2 = indiv1+1; indiv2<((uint64_t)numIndivs); indiv2++){
 		float totalIBD1Length = 0;
 		float totalIBD2Length = 0;
 
@@ -743,7 +764,7 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 
 
 				compareWindowsIBD1(ind1Data->hom1, ind1Data->hom2, ind2Data->hom1, ind2Data->hom2, windowErrorCount, isIBD1);
-
+				uint64_t missingnessCount = getMissingness(ind1Data->miss,ind2Data->miss);
 				//Don't bother checking IBD2 if there are too many errors in IBD1.
 				if(ibd2 && isIBD1){
 					compareWindowsIBD2(ind1Data->hom1, ind1Data->hom2, ind2Data->hom1, ind2Data->hom2, ind1Data->miss, ind2Data->miss, windowErrorCount2, isIBD2);
@@ -761,11 +782,11 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 								if (currentIBD2Segment.errorCheck(windowErrorCount2, currentEndPos, errorThreshold2)){//Update potential endpoint if error threshold passed.
 									bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
 									if(realSeg){
-										handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
+										handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length, missingnessCount);
 									}
 								}
 								else{//Update endpoints if no errors
-									currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);
+									currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount, missingnessCount);
 								}
 							}
 						}
@@ -773,13 +794,13 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 
 							if(!currentIBD2Segment.hasStart())//Update startopint if there is no current real segment.
 								currentIBD2Segment.updateSegmentStartpoints(starts[markerWindow]);
-							currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount);//Update endpoint always.
+							currentIBD2Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount2, windowErrorCount, missingnessCount);//Update endpoint always.
 						}
 					}
 					else {//If no IBD, attempt to store segment if valid.
 						bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
 						if(realSeg){
-							handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
+							handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length, missingnessCount);
 						}
 					}
 				}
@@ -794,14 +815,14 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 								endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
 							}
 							else{
-								currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+								currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount, missingnessCount);
 							}
 						}
 					}
 					else{
 						if(!currentIBD1Segment.hasStart())
 							currentIBD1Segment.updateSegmentStartpoints(starts[markerWindow]);
-						currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+						currentIBD1Segment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount, missingnessCount);
 					}
 				}
 				else {
@@ -817,7 +838,7 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 				//Attempt to print IBD2 at the end of the chromosome if there is a valid segment.
 				bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
 				if(realSeg){
-					handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length);
+					handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length,0);
 				}
 			}
 			//Attempt to print IBD1 at the end of the chromosome if there is a valid segment.
@@ -880,7 +901,7 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 			int windowErrorCount;
 
 			compareWindowHBD(ind1Data->hom1, ind1Data->hom2, ind1Data->miss, windowErrorCount, isHBD);
-
+			uint64_t missingnessCount = (uint64_t)__builtin_popcountl(ind1Data->miss);
 			if (isHBD) {
 				int currentEndPos = ends[markerWindow];
 				if (windowErrorCount > 0) {
@@ -888,13 +909,13 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 						if (currentHBDSegment.errorCheck(windowErrorCount, currentEndPos, errorThresholdHBD))
 							endHBDSegment(currentHBDSegment, min_length_hbd, min_markers_hbd, storedSegs, totalHBDLength);
 						else
-							currentHBDSegment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+							currentHBDSegment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount, missingnessCount);
 					}
 				}
 				else {
 					if(!currentHBDSegment.hasStart())
 						currentHBDSegment.updateSegmentStartpoints(starts[markerWindow]);
-					currentHBDSegment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount);
+					currentHBDSegment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount, missingnessCount);
 				}
 			}
 			else {
@@ -1028,7 +1049,15 @@ void printUsageAndExit(){
 	printf("      IBIS makes this conversion if any input chromosome is <= 6 genetic units in length, -noConvert disables\n");
 	printf("  -maxDist <value>\n");
 	printf("      Set a maximum separation distance between SNPs in the input map.\n");
-	printf("      Defaults to being inactive.\n\n");
+	printf("      Defaults to being inactive.\n");
+	printf("  -setIndexStart <value>\n");
+	printf("      Set a start index for the set of samples to be compared against all other samples in the input dataset.\n");
+	printf("      Must be greater than or equal to 0.");
+	printf("      Defaults to 0, the index of the first sample.\n");
+	printf("  -setIndexEnd <value>\n");
+        printf("      Set an end index for the set of samples to be compared against all other samples in the input dataset. Includes given index.\n");
+	printf("      Must be less than or equal to n-1, where n is the number of samples in the input.");
+        printf("      Defaults to n-1, the index of the last sample.\n\n");
 	printf(" IBD threshold parameters:\n");
 	printf("  -er or -errorRate <value>\n");
 	printf("      Specify acceptable error rate in a segment before considering it false.\n");
@@ -1242,9 +1271,16 @@ int main(int argc, char **argv) {
 		}
 		else if(arg=="-setIndexEnd"){
 			index1End = atoi(argv[i+1]);
+			printf("%s - attempting to set a sample end index of %i\n",arg.c_str(),index1End);
+			//Does not yet know size of sample set. Checks later.
 		}
 		else if(arg=="-setIndexStart"){
 			index1Start = atoi(argv[i+1]);
+			printf("%s - attempting to set a sample start index of %i\n",arg.c_str(),index1Start);
+			if(index1Start < 0){
+				printf("Cannot select starting index for samples less than 0.");
+				exit(1);
+			}
 		}
 		else if(arg=="-maxDist"){
 			printf("%s - altering maximum SNP separation value to %s\n", arg.c_str(),argv[i+1]);
@@ -1270,6 +1306,9 @@ int main(int argc, char **argv) {
 		printf("No -b or -bfile - Running with input files: %s, %s, %s\n",argv[1], argv[2], argv[3]);
 		PersonIO<PersonLoopData>::readData(argv[1], argv[2], argv[3], /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true, /*useParents=*/ false);
 	}
+
+
+
 	if(numThreads==0){
 		numThreads = 1;
 	}
@@ -1280,7 +1319,10 @@ int main(int argc, char **argv) {
 	}
 
 	numIndivs = PersonLoopData::_allIndivs.length();
-
+	if((uint64_t)index1End > numIndivs-1){
+                printf("Cannot select ending index for samples beyond the final index.");
+        	exit(1);
+        }
 	numMarkers = Marker::getNumMarkers();
 	uint64_t indBlocks = (numIndivs + 63) / 64; //blocks are based on the number of individuals
 	uint64_t markerWindows = 0;
