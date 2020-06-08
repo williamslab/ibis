@@ -1134,7 +1134,7 @@ int main(int argc, char **argv) {
 	bool distForce = false;//If true, stops the program from converting the input to cM.
 	bool gzip = false;//If True, gzips the output.
 	float errorThreshold = 0.004, errorThreshold2 = 0.008, errorThresholdHBD = 0.008;//Maximum allowed error rates.
-	float min_markers = 447, min_markers2 = 191, min_markers_hbd = 191;//Marker minimums for segments.
+	float min_markers = 445, min_markers2 = 190, min_markers_hbd = 190;//Marker minimums for segments.
 	const char* chrom = NULL;//Which chromosome to analyze? If null, analyzes all input chromosomes
 	int numThreads;//Input threadnumber.
 	numThreads=0;
@@ -1323,7 +1323,7 @@ int main(int argc, char **argv) {
                 printf("Cannot select ending index for samples beyond the final index.\n");
         	exit(1);
         }
-	else if ((index1End <= index1Start)){
+	else if ((index1End < index1Start)){
 		printf("Cannot select ending index before starting index.\n");
 		exit(1);
 	}
