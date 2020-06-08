@@ -1119,7 +1119,7 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.20.2";
+	const char* VERSION_NUMBER = "1.20.3";
 	const char* RELEASE_DATE = "June 8, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
@@ -1134,7 +1134,7 @@ int main(int argc, char **argv) {
 	bool distForce = false;//If true, stops the program from converting the input to cM.
 	bool gzip = false;//If True, gzips the output.
 	float errorThreshold = 0.004, errorThreshold2 = 0.008, errorThresholdHBD = 0.008;//Maximum allowed error rates.
-	float min_markers = 445, min_markers2 = 190, min_markers_hbd = 190;//Marker minimums for segments.
+	float min_markers = 443, min_markers2 = 189, min_markers_hbd = 189;//Marker minimums for segments.
 	const char* chrom = NULL;//Which chromosome to analyze? If null, analyzes all input chromosomes
 	int numThreads;//Input threadnumber.
 	numThreads=0;
