@@ -1051,12 +1051,12 @@ void printUsageAndExit(){
 	printf("      Set a maximum separation distance between SNPs in the input map.\n");
 	printf("      Defaults to being inactive.\n");
 	printf("  -setIndexStart <value>\n");
-	printf("      Set a start index for the set of samples to be compared against all other samples in the input dataset.\n");
-	printf("      Must be greater than or equal to 0.");
+	printf("      Set a start index for the set of samples to be compared against all other samples that apepar later in the input dataset.\n");
+	printf("      Must be greater than or equal to 0.\n");
 	printf("      Defaults to 0, the index of the first sample.\n");
 	printf("  -setIndexEnd <value>\n");
-        printf("      Set an end index for the set of samples to be compared against all other samples in the input dataset. Includes given index.\n");
-	printf("      Must be less than or equal to n-1, where n is the number of samples in the input.");
+        printf("      Set an end index for the set of samples to be compared against all other samples later than the start index in the input dataset. Includes given index.\n");
+	printf("      Must be less than or equal to n-1, where n is the number of samples in the input.\n");
         printf("      Defaults to n-1, the index of the last sample.\n\n");
 	printf(" IBD threshold parameters:\n");
 	printf("  -er or -errorRate <value>\n");
@@ -1067,7 +1067,7 @@ void printUsageAndExit(){
 	printf("      Defaults to 7 centimorgans.\n");
 	printf("  -mt <value>\n");
 	printf("      Set minimum number of markers required for acceptable segments to output.\n");
-	printf("      Defaults to 448 markers\n\n");
+	printf("      Defaults to 436 markers\n\n");
 	printf(" IBD2 threshold parameters: (use with -2 or -ibd2)\n");
 	printf("  -er2 or -errorRate2 <value>\n");
 	printf("      Specify acceptable error rate in an IBD2 segment before considering it false.\n");
@@ -1077,7 +1077,7 @@ void printUsageAndExit(){
 	printf("      Defaults to 2 centimorgans.\n");
 	printf("  -mt2 <value>\n");
 	printf("      Set minimum number of markers required for acceptable IBD2 segments to output.\n");
-	printf("      Defaults to 192 markers\n\n");
+	printf("      Defaults to 186 markers\n\n");
 	printf(" HBD threshold parameters: (use with -hbd)\n");
 	printf("  -erH or -errorRateH <value>\n");
 	printf("      Specify acceptable error rate in an HBD segment before considering it false.\n");
@@ -1087,7 +1087,7 @@ void printUsageAndExit(){
 	printf("      Defaults to 3 centimorgans.\n");
 	printf("  -mtH <value>\n");
 	printf("      Set minimum number of markers required for acceptable HBD segments to output.\n");
-	printf("      Defaults to 192 markers\n\n");
+	printf("      Defaults to 186 markers\n\n");
 	printf(" Output controls:\n");
 	printf("  -f <filename> or -o <filename> or -file <filename>\n");
 	printf("      Specify output file prefix.\n");
@@ -1134,7 +1134,7 @@ int main(int argc, char **argv) {
 	bool distForce = false;//If true, stops the program from converting the input to cM.
 	bool gzip = false;//If True, gzips the output.
 	float errorThreshold = 0.004, errorThreshold2 = 0.008, errorThresholdHBD = 0.008;//Maximum allowed error rates.
-	float min_markers = 443, min_markers2 = 189, min_markers_hbd = 189;//Marker minimums for segments.
+	float min_markers = 435, min_markers2 = 185, min_markers_hbd = 185;//Marker minimums for segments.
 	const char* chrom = NULL;//Which chromosome to analyze? If null, analyzes all input chromosomes
 	int numThreads;//Input threadnumber.
 	numThreads=0;
@@ -1273,6 +1273,10 @@ int main(int argc, char **argv) {
 			index1End = atoi(argv[i+1]);
 			printf("%s - attempting to set a sample end index of %i\n",arg.c_str(),index1End);
 			//Does not yet know size of sample set. Checks later.
+			if(index1End<=0){
+				printf("Cannot select starting ending index less than or equal to 0.");
+				exit(1);
+			}
 		}
 		else if(arg=="-setIndexStart"){
 			index1Start = atoi(argv[i+1]);
@@ -1323,7 +1327,7 @@ int main(int argc, char **argv) {
                 printf("Cannot select ending index for samples beyond the final index.\n");
         	exit(1);
         }
-	else if ((index1End < index1Start)){
+	else if ((index1End < index1Start) && index1End!=0){
 		printf("Cannot select ending index before starting index.\n");
 		exit(1);
 	}
