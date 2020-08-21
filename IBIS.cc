@@ -733,7 +733,7 @@ void interleaveAndConvertData(HomozygAndMiss transposedData[], int64_t indBlocks
 }
 
 template<class IO_TYPE>
-void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMiss transposedData[], int numIndivs, int markerWindows, std::vector<int> &starts, std::vector<int> &ends, uint64_t chromWindowBoundaries[][2], int min_markers, float min_length, int min_markers2, float min_length2, int min_markers_hbd, float min_length_hbd, float errorThreshold, float errorThreshold2, float errorThresholdHBD, bool ibd2, bool hbd, bool printCoef, float min_coef, float fudgeFactor, bool binary, bool printFam, omp_lock_t *lock, FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, FileOrGZ<IO_TYPE> &hbdFile, FileOrGZ<IO_TYPE> &incoefFile, float totalGeneticLength, uint64_t index2End) {
+void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMiss transposedData[], int numIndivs, int markerWindows, std::vector<int> &starts, std::vector<int> &ends, uint64_t chromWindowBoundaries[][2], int min_markers, float min_length, int min_markers2, float min_length2, int min_markers_hbd, float min_length_hbd, float errorThreshold, float errorThreshold2, float errorThresholdHBD, bool ibd2, bool hbd, bool printCoef, float min_coef, float fudgeFactor, bool binary, bool printFam, omp_lock_t *lock, FileOrGZ<IO_TYPE> &pFile, FileOrGZ<IO_TYPE> &classFile, FileOrGZ<IO_TYPE> &hbdFile, FileOrGZ<IO_TYPE> &incoefFile, float totalGeneticLength, uint64_t index2End, int &totalSegmentCount) {
 
 	// search for IBD from <indiv1> to all individuals with higher indexes:
 	for(uint64_t indiv2 = indiv1+1; indiv2<((uint64_t)numIndivs); indiv2++){
@@ -875,6 +875,7 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 			}
 			for (SegmentData seg: storedSegs){
 				seg.printSegment(pFile,indiv1,indiv2,binary);
+				totalSegmentCount+=1;
 			}
 			if (lock)
 				omp_unset_lock(lock);
@@ -946,7 +947,7 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 
 	//Transposes the input matrix and handles the 8->64 bit format conversion..
 	interleaveAndConvertData(transposedData, indBlocks, markerWindows, numMarkers, numIndivs, starts, ends,  chromWindowStarts);
-
+	int totalSegmentCount = 0;
 
 	printf("Beginning segment detection with %i thread(s)...",numThreads);
 	fflush(stdout);
@@ -964,11 +965,11 @@ void segmentAnalysisMonoThread(HomozygAndMiss transposedData[], int numIndivs, i
 		index1End=numIndivs-1;
 	std::vector<SegmentData> storedSegs;
 	for(uint64_t indiv1=index1Start; indiv1<=((uint64_t)index1End); indiv1++){
-		ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, /*lock=None=*/ NULL, pFile, classFile, hbdFile, incoefFile, totalGeneticLength, index1End);
+		ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, /*lock=None=*/ NULL, pFile, classFile, hbdFile, incoefFile, totalGeneticLength, index1End, totalSegmentCount);
 	}
 
 	closeSegCoefOut(pFile, classFile, hbdFile, incoefFile, printCoef, hbd);
-
+	printf("Total Segments Found: %i\n",totalSegmentCount);
 	printf("done.\n");
 }
 
@@ -980,7 +981,7 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 
 	omp_lock_t lock;//Lock for the coefficient/relationship class file
 	omp_init_lock(&lock);
-
+	int totalSegmentCount = 0;
 
 	//Transposes the input matrix and handles the 8->64 bit format conversion..
 	interleaveAndConvertData(transposedData, indBlocks, markerWindows, numMarkers, numIndivs, starts, ends,  chromWindowStarts);
@@ -1008,12 +1009,12 @@ void segmentAnalysis(HomozygAndMiss transposedData[], int numIndivs, int indBloc
 		std::vector<SegmentData> storedSegs;
 #pragma omp for schedule(dynamic, 60)
 		for(uint64_t indiv1 = index1Start; indiv1<((uint64_t)index1End); indiv1++){
-			ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, &lock, pFile, classFile, hbdFile, incoefFile, totalGeneticLength, index1End);
+			ibisOn(indiv1, storedSegs, transposedData, numIndivs, markerWindows, starts, ends, chromWindowBoundaries, min_markers, min_length, min_markers2, min_length2, min_markers_hbd, min_length_hbd, errorThreshold, errorThreshold2, errorThresholdHBD, ibd2, hbd, printCoef, min_coef, fudgeFactor, binary, printFam, &lock, pFile, classFile, hbdFile, incoefFile, totalGeneticLength, index1End, totalSegmentCount);
 		}
 	}
 
 	closeSegCoefOut(pFile, classFile, hbdFile, incoefFile, printCoef, hbd);
-
+	printf("Total Segments Found: %i\n",totalSegmentCount);
 	printf("done.\n");
 }
 
@@ -1119,8 +1120,8 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.20.3";
-	const char* RELEASE_DATE = "June 8, 2020";
+	const char* VERSION_NUMBER = "1.21";
+	const char* RELEASE_DATE = "August 21, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
@@ -1404,7 +1405,7 @@ int main(int argc, char **argv) {
 	float totalGeneticLength = 0.0;//Value to use as whole input genetic length for calculating coefficients.
 	for(int chr = 0; chr < Marker::getNumChroms(); chr++)
 		totalGeneticLength += (Marker::getMarker( Marker::getLastMarkerNum( chr ) )->getMapPos() - Marker::getMarker( Marker::getFirstMarkerNum( chr ) )->getMapPos());
-
+	printf("Total Genetic Length in use:%f\n", totalGeneticLength);
 	if(numThreads>1){
 		if(gzip){
 			extension = ".gz";
