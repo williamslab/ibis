@@ -382,7 +382,7 @@ void SegmentData::updateSegmentStartpoints(int newStartPos){
 }
 //Confirms if segment meets relevant conditions to be a valid segment.
 inline bool SegmentData::checkSegment(float min_length, int marker_length){
-	return ((endPos > startPos) && (startPos >= 0) && (realIBD2 || (((endPos - startPos) >= marker_length) && ((altMap->at(endPos) - altMap->at(startPos)) > min_length))));
+	return ((endPos > startPos) && (startPos >= 0) && (realIBD2 || (((endPos - startPos - missingness) >= marker_length) && ((altMap->at(endPos) - altMap->at(startPos)) > min_length))));
 	//return ((endPos > startPos) && (startPos >= 0) && (realIBD2 || (((endPos - startPos) > marker_length) && ((endFloat - startFloat) > min_length))));
 }
 //Invalid segments are reprsented by a startPos of -1.
@@ -1120,8 +1120,8 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.20.5";
-	const char* RELEASE_DATE = "August 21, 2020";
+	const char* VERSION_NUMBER = "1.20.6";
+	const char* RELEASE_DATE = "September 2, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
