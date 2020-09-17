@@ -294,7 +294,7 @@ class SegmentData{
 
 		float cMLength();
 		int markerLength();
-		bool errorCheck(int newError, int newEndPos, float errorRate);//Confirms segments error
+		bool errorCheck(int newError, int newMissingness, int newEndPos, float errorRate);//Confirms segments error
 		void updateSegmentEndpoints(int newEndPos, int newError, int newIBD1Error, int newMissingness);
 		void updateSegmentStartpoints(int newStartPos);
 		bool checkSegment(float min_length, int marker_length);
@@ -349,8 +349,8 @@ void SegmentData::printHBDSegment(FileOrGZ<IO_TYPE> &pFile, int ind) {
 }
 
 //Return true if the segment with the new modifications fails the error threshold test: true if fail, false if pass.
-inline bool SegmentData::errorCheck(int newError, int newEndPos, float errorRate){
-	return (float(errorCount + trackedError + newError) / float(newEndPos - startPos)) > errorRate;
+inline bool SegmentData::errorCheck(int newError, int newMissingness, int newEndPos, float errorRate){
+	return (float(errorCount + trackedError + newError) / float(newEndPos - startPos - missingness - newMissingness)) > errorRate;
 }
 
 void SegmentData::updateSegmentEndpoints(int newEndPos, int newError, int newIBD1Error, int newMissingness){
@@ -779,7 +779,7 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 						int currentEndPos = ends[markerWindow];
 						if(windowErrorCount2>0){
 							if(currentIBD2Segment.hasStart()) {
-								if (currentIBD2Segment.errorCheck(windowErrorCount2, currentEndPos, errorThreshold2)){//Update potential endpoint if error threshold passed.
+								if (currentIBD2Segment.errorCheck(windowErrorCount2, missingnessCount, currentEndPos, errorThreshold2)){//Update potential endpoint if error threshold passed.
 									bool realSeg = endSegment(currentIBD2Segment, min_length2, min_markers2,  storedSegs, totalIBD1Length, totalIBD2Length);
 									if(realSeg){
 										handleIBD1PostIBD2(currentIBD1Segment,  storedSegs, totalIBD1Length, totalIBD2Length, missingnessCount);
@@ -811,7 +811,7 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 					int currentEndPos = ends[markerWindow];
 					if(windowErrorCount>0){
 						if(currentIBD1Segment.hasStart()) {
-							if (currentIBD1Segment.errorCheck(windowErrorCount, currentEndPos, errorThreshold)){
+							if (currentIBD1Segment.errorCheck(windowErrorCount, missingnessCount, currentEndPos, errorThreshold)){
 								endSegment(currentIBD1Segment, min_length, min_markers,  storedSegs, totalIBD1Length, totalIBD2Length);
 							}
 							else{
@@ -907,7 +907,7 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 				int currentEndPos = ends[markerWindow];
 				if (windowErrorCount > 0) {
 					if (currentHBDSegment.hasStart()) {
-						if (currentHBDSegment.errorCheck(windowErrorCount, currentEndPos, errorThresholdHBD))
+						if (currentHBDSegment.errorCheck(windowErrorCount, missingnessCount, currentEndPos, errorThresholdHBD))
 							endHBDSegment(currentHBDSegment, min_length_hbd, min_markers_hbd, storedSegs, totalHBDLength);
 						else
 							currentHBDSegment.updateSegmentEndpoints(currentEndPos, windowErrorCount, windowErrorCount, missingnessCount);
