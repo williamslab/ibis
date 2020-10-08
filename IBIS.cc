@@ -1305,11 +1305,11 @@ int main(int argc, char **argv) {
 	}
 	if(bFileNamesGiven)
 	{
-		PersonIO<PersonLoopData>::readData(bfileNameBed, bfileNameBim, bfileNameFam, /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true,  /*useParents=*/ false);
+		PersonIO<PersonLoopData>::readData(bfileNameBed, bfileNameBim, bfileNameFam, /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true,  /*useParents=*/ false, /*ignoreAlleles=*/ true);
 	}
 	else{
 		printf("No -b or -bfile - Running with input files: %s, %s, %s\n",argv[1], argv[2], argv[3]);
-		PersonIO<PersonLoopData>::readData(argv[1], argv[2], argv[3], /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true, /*useParents=*/ false);
+		PersonIO<PersonLoopData>::readData(argv[1], argv[2], argv[3], /*onlyChr=*/ chrom, /*startPos=*/ 0, /*endPos=*/ INT_MAX, /*XchrName=*/ "X", /*noFamilyId=*/ noFams, /*log=*/ NULL, /*allowEmptyParents=*/ false, /*bulkData=*/ false, /*loopData*/ true, /*useParents=*/ false, /*ignoreAlleles=*/ true);
 	}
 
 
