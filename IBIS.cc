@@ -863,7 +863,7 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 					}
 				}
 				else{
-					for(classVal=0; classVal<8; classVal++){//find degree of relatedness
+					for(classVal=1; classVal<8; classVal++){//find degree of relatedness
 						if(ibd1TotalMod<ibd0Thresholds[classVal]){
 							break;
 						}
@@ -1120,8 +1120,8 @@ void printUsageAndExit(){
 
 int main(int argc, char **argv) {
 
-	const char* VERSION_NUMBER = "1.20.8";
-	const char* RELEASE_DATE = "October 9, 2020";
+	const char* VERSION_NUMBER = "1.20.9";
+	const char* RELEASE_DATE = "December 7, 2020";
 	printf("IBIS Segment Caller!  v%s    (Released %s)\n\n", VERSION_NUMBER, RELEASE_DATE);
 
 	uint64_t numIndivs, numMarkers;//counts of input quantities.
