@@ -29,7 +29,7 @@ To pull IBIS updates, use
   * Running [PLINK](https://www.cog-genomics.org/plink2/) with `--make-bed` enables conversion from many other forms of genetic data into this file format.
 
 2. Insert a genetic map into the bim file using [add-map-plink.pl](add-map-plink.pl).
-  * A good human genetic map is the [HapMap II map](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/) ([http link](http://bit.ly/33s6XQG)). As of this writing, the latest version for build 37 is available [here](ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz) ([http link](http://bit.ly/2QuvNu9)).
+  * A good human genetic map is the [HapMap II map](https://ftp.ncbi.nlm.nih.gov/hapmap/recombination/). As of this writing, the latest version for build 37 is available [here](https://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/genetic_map_HapMapII_GRCh37.tar.gz).
   * Example `add-map-plink.pl` command using bash:
 ```
 ./add-map-plink.pl my.bim [map directory]/genetic_map_GRCh37_chr{1..22}.txt > new.bim
