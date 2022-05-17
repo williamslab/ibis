@@ -208,7 +208,7 @@ size_t FileOrGZ<gzFile>::pfwrite(const void *ptr, size_t size, size_t n) {      
 template<>
 int FileOrGZ<FILE *>::close() {
 	assert(buf_len == 0);
-	// should free buf, but I know the program is about to end, so won't
+	free(buf);
 	return fclose(fp);
 }
 
@@ -216,6 +216,7 @@ template<>
 int FileOrGZ<gzFile>::close() {
 	if (buf_len > 0)
 		gzwrite(fp, buf, buf_len);
+	free(buf);
 	return gzclose(fp);
 }
 
@@ -1428,4 +1429,19 @@ int main(int argc, char **argv) {
 		}
 
 	}
+
+	delete transposedData;
+
+	if (bfileNameBed)
+	    delete[] bfileNameBed;
+	if (bfileNameBim)
+	    delete[] bfileNameBim;
+	if (bfileNameFam)
+	    delete[] bfileNameFam;
+
+	if (SegmentData::altMap)
+	    delete SegmentData::altMap;
+
+	Marker::cleanUp();
+	PersonIO<PersonLoopData>::cleanUp();
 }
