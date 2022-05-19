@@ -23,6 +23,20 @@ ifdef PROFILE       # to use run `make PROFILE=1
   CFLAGS += -pg
 endif
 
+# force memory freeing
+ifdef FORCE_FREE
+  CFLAGS += -DFORCE_FREE
+endif
+
+# shared
+ifdef SHARED
+  ifndef FORCE_FREE
+    CFLAGS += -DFORCE_FREE
+  endif
+  CFLAGS += -fPIC
+  CFLAGS += --no-gnu-unique
+endif
+
 LIBS= -lz
 ifdef RELEASE
   LIBS += -static-libstdc++ -static-libgcc
@@ -76,3 +90,6 @@ clean:
 
 clean-deps:
 	rm -f $(DEPDIR)/*.P
+
+libibis.so: $(OBJS) $(HEADERS)
+	$(GPP) -o "$@" $(OBJS) -shared $(CFLAGS) $(LIBS)
