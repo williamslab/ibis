@@ -11,7 +11,7 @@ GCC = gcc
 DEFINES= 
 CFLAGS = -I. -Wall $(DEFINES) -fopenmp -mpopcnt
 # -march=native
-CPPFLAGS = -std=c++11 $(CFLAGS)
+CPPFLAGS = -std=c++2a $(CFLAGS)
 ifdef DEBUG           # to use run `make DEBUG=1`
   CFLAGS += -g
 else
