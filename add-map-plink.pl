@@ -31,9 +31,11 @@ use Getopt::Long;
 
 my $use_cM = 0;
 my $no_header = 0;
+my $no_set_zero = 0;
 
 GetOptions( "-cm" => \$use_cM,
-	    "-noheader" => \$no_header);
+	    "-noheader" => \$no_header,
+	    "-no_set_zero" => \$no_set_zero);
 
 if (@ARGV < 2) {
   &print_usage();
@@ -139,6 +141,7 @@ while ($_ = <PLINK_SNP>) {
   }
   else {
     # find the index immediately after $phys_pos:
+    my $map_len = scalar @{ $map{ $cur_chr } };
     for( ; $cur_index < scalar @{ $map{ $cur_chr } } &&
 	     $map{ $cur_chr }[ $cur_index ][0] < $phys_pos; $cur_index++) { }
 
@@ -147,9 +150,15 @@ while ($_ = <PLINK_SNP>) {
 	print STDERR "\n";
 	$have_warned = 1;
       }
-      print STDERR "Warning: position $phys_pos after chrom $cur_chr end; map and physical pos set to 0\n";
-      $genet_pos = 0.0;
-      $fields[3] = 0;
+      $genet_pos = $map{ $cur_chr }[ $map_len - 1 ][1];
+      if ($no_set_zero) {
+	print STDERR "Warning: position $phys_pos after chrom $cur_chr end; map pos set to $genet_pos\n";
+      }
+      else {
+	print STDERR "Warning: position $phys_pos after chrom $cur_chr end; map and physical pos set to 0\n";
+	$genet_pos = 0.0;
+	$fields[3] = 0;
+      }
     }
     elsif ($map{ $cur_chr }[ $cur_index ][0] == $phys_pos) {
       $genet_pos = $map{ $cur_chr }[ $cur_index ][1];
@@ -160,9 +169,14 @@ while ($_ = <PLINK_SNP>) {
 	  print STDERR "\n";
 	  $have_warned = 1;
 	}
-	print STDERR "Warning: position $phys_pos before chrom $cur_chr start; map and physical pos set to 0\n";
 	$genet_pos = 0.0;
-	$fields[3] = 0;
+	if ($no_set_zero) {
+	  print STDERR "Warning: position $phys_pos before chrom $cur_chr start; map pos set to 0\n";
+	}
+	else {
+	  print STDERR "Warning: position $phys_pos before chrom $cur_chr start; map and physical pos set to 0\n";
+	  $fields[3] = 0;
+	}
       }
       else {
 	# linear interpolation:
