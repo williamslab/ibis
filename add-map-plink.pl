@@ -207,9 +207,11 @@ sub print_usage() {
   print STDERR "Usage:\n";
   print STDERR "$0 <-cm> <-header> [plink bim/map file] [genetic map file(s)]\n";
   print STDERR "   -cm\t\tprints positions in centiMorgans instead of the Morgan default\n";
-  print STDERR "   -noheader\tindicates the genetic map files do not have a header line;\n";
+  print STDERR "   -noheader\tindicates the genetic map files do not have a header line\n";
   print STDERR "\t\tby default the code ignores the first line of every genetic map\n";
   print STDERR "\t\tfile: use this option to include this line\n";
+  print STDERR "   -no_set_zero\tuse neighboring sites' cM position for locations outside map\n";
+  print STDERR "\t\tinstead of always setting these to 0\n";
   print STDERR "\n";
   print STDERR "   Accepts any number of genetic map files, so long as data for one chromosome\n";
   print STDERR "   is in only one file\n";
