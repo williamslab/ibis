@@ -876,7 +876,7 @@ void ibisOn(uint64_t indiv1, std::vector<SegmentData> &storedSegs, HomozygAndMis
 				}
 				if(classVal==8)
 					classVal=-1;//notation for unrelated
-				classFile.printf("%s\t%s\t%f\t%f\t%i\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
+				classFile.printf("%s\t%s\t%f\t%zu\t%f\t%i\n",PersonLoopData::_allIndivs[indiv1]->getId(),PersonLoopData::_allIndivs[indiv2]->getId(), relCoef, storedSegs.size(), totalIBD2Length/totalGeneticLength, classVal);
 			}
 			for (SegmentData seg: storedSegs){
 				seg.printSegment(pFile,indiv1,indiv2,binary);
